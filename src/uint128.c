@@ -73,16 +73,18 @@ void clear128(uint128_t *const target) {
   ensures 0 < value < 64 ==>
     target->elements[0] ==
       ((\old(number->elements[0]) << value) +
-       (\old(number->elements[1]) >> (64 - value))) &&
-    target->elements[1] == (\old(number->elements[1]) << value);
+       (\old(number->elements[1]) >> (64 - value))) % 0x10000000000000000 &&
+    target->elements[1] ==
+      (\old(number->elements[1]) << value) % 0x10000000000000000;
 
   ensures 64 < value < 128 ==>
-    target->elements[0] == (\old(number->elements[1]) << (value - 64)) &&
+    target->elements[0] ==
+      (\old(number->elements[1]) << (value - 64)) % 0x10000000000000000 &&
     target->elements[1] == 0;
 
   ensures value < 128 ==>
     uint128_val(*target) ==
-      (uint128_val(*\old(number)) * pow2(value)) % pow2(128);
+      (uint128_val(\old(*number)) * pow2(value)) % pow2(128);
 */
 /**
  * ```gherkin
