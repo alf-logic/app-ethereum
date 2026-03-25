@@ -44,6 +44,179 @@ void clear128(uint128_t *const target) {
     LOWER_P(target) = 0;
 }
 
+/*@
+  axiomatic Uint128Math {
+    logic integer uint128_val(uint128_t v) =
+      v.elements[0] * 0x10000000000000000 + v.elements[1];
+
+    logic integer pow2(integer n);
+    axiom pow2_0: pow2(0) == 1;
+    axiom pow2_pos: \forall integer n; n > 0 ==> pow2(n) == 2 * pow2(n - 1);
+  }
+
+  requires \valid_read(number);
+  requires \valid(target);
+
+  assigns target->elements[0], target->elements[1];
+
+  ensures value >= 128 ==>
+    target->elements[0] == 0 && target->elements[1] == 0;
+
+  ensures value == 64 ==>
+    target->elements[0] == \old(number->elements[1]) &&
+    target->elements[1] == 0;
+
+  ensures value == 0 ==>
+    target->elements[0] == \old(number->elements[0]) &&
+    target->elements[1] == \old(number->elements[1]);
+
+  ensures 0 < value < 64 ==>
+    target->elements[0] ==
+      ((\old(number->elements[0]) << value) +
+       (\old(number->elements[1]) >> (64 - value))) &&
+    target->elements[1] == (\old(number->elements[1]) << value);
+
+  ensures 64 < value < 128 ==>
+    target->elements[0] == (\old(number->elements[1]) << (value - 64)) &&
+    target->elements[1] == 0;
+
+  ensures value < 128 ==>
+    uint128_val(*target) ==
+      (uint128_val(*\old(number)) * pow2(value)) % pow2(128);
+*/
+/**
+ * ```gherkin
+ * @id-feat-shiftl128
+ * Feature: shiftl128
+ *   Left-shift a 128-bit unsigned integer by a given number of bits,
+ *   storing the result in target. The 128-bit value is represented as
+ *   two 64-bit halves: elements[0] (upper) and elements[1] (lower).
+ *
+ *   @id-rule-overflow
+ *   Rule: Shift amount >= 128 produces zero
+ *     * constraint: Any shift of 128 or more bits zeros out all 128 bits
+ *
+ *     @id-scen-shift-128
+ *     @verified-by-unittest
+ *     @unittest-name-test_shiftl128_shift_128_clears
+ *     Scenario: Shift by exactly 128
+ *       Given a uint128 with upper=0xAAAAAAAAAAAAAAAA lower=0xBBBBBBBBBBBBBBBB
+ *       When shiftl128 is called with value=128
+ *       Then the result upper is 0 and lower is 0
+ *
+ *     @id-scen-shift-200
+ *     @verified-by-unittest
+ *     @unittest-name-test_shiftl128_shift_200_clears
+ *     Scenario: Shift by 200 (well above 128)
+ *       Given a uint128 with upper=0xFFFFFFFFFFFFFFFF lower=0xFFFFFFFFFFFFFFFF
+ *       When shiftl128 is called with value=200
+ *       Then the result upper is 0 and lower is 0
+ *
+ *     @id-scen-shift-max-u32
+ *     @verified-by-unittest
+ *     @unittest-name-test_shiftl128_shift_max_uint32_clears
+ *     Scenario: Shift by UINT32_MAX
+ *       Given a uint128 with upper=1 lower=1
+ *       When shiftl128 is called with value=4294967295
+ *       Then the result upper is 0 and lower is 0
+ *
+ *   @id-rule-shift-64
+ *   Rule: Shift by exactly 64 moves lower half to upper, zeros lower
+ *     * constraint: The lower 64 bits become the upper 64 bits; lower becomes 0
+ *
+ *     @id-scen-shift-64-typical
+ *     @verified-by-unittest
+ *     @unittest-name-test_shiftl128_shift_64_moves_lower_to_upper
+ *     Scenario: Shift by 64 with typical value
+ *       Given a uint128 with upper=0x1111111111111111 lower=0x2222222222222222
+ *       When shiftl128 is called with value=64
+ *       Then the result upper is 0x2222222222222222 and lower is 0
+ *
+ *     @id-scen-shift-64-max-lower
+ *     @verified-by-unittest
+ *     @unittest-name-test_shiftl128_shift_64_max_lower
+ *     Scenario: Shift by 64 with max lower
+ *       Given a uint128 with upper=0 lower=0xFFFFFFFFFFFFFFFF
+ *       When shiftl128 is called with value=64
+ *       Then the result upper is 0xFFFFFFFFFFFFFFFF and lower is 0
+ *
+ *   @id-rule-shift-0
+ *   Rule: Shift by 0 is identity
+ *     * constraint: The result equals the input exactly
+ *
+ *     @id-scen-shift-0-nonzero
+ *     @verified-by-unittest
+ *     @unittest-name-test_shiftl128_shift_0_identity
+ *     Scenario: Shift by 0 preserves value
+ *       Given a uint128 with upper=0xDEADBEEFDEADBEEF lower=0xCAFEBABECAFEBABE
+ *       When shiftl128 is called with value=0
+ *       Then the result upper is 0xDEADBEEFDEADBEEF and lower is 0xCAFEBABECAFEBABE
+ *
+ *     @id-scen-shift-0-zero
+ *     @verified-by-unittest
+ *     @unittest-name-test_shiftl128_shift_0_zero_stays_zero
+ *     Scenario: Shift zero by 0
+ *       Given a uint128 with upper=0 lower=0
+ *       When shiftl128 is called with value=0
+ *       Then the result upper is 0 and lower is 0
+ *
+ *   @id-rule-shift-lt-64
+ *   Rule: Shift by 1..63 bits crosses the half boundary
+ *     * constraint: Bits shift left within lower, overflow carries into upper
+ *
+ *     @id-scen-shift-1
+ *     @verified-by-unittest
+ *     @unittest-name-test_shiftl128_shift_1
+ *     Scenario: Shift by 1 propagates MSB of lower into upper
+ *       Given a uint128 with upper=0 lower=0x8000000000000000
+ *       When shiftl128 is called with value=1
+ *       Then the result upper is 1 and lower is 0
+ *
+ *     @id-scen-shift-32
+ *     @verified-by-unittest
+ *     @unittest-name-test_shiftl128_shift_32
+ *     Scenario: Shift by 32
+ *       Given a uint128 with upper=0 lower=0x00000001FFFFFFFF
+ *       When shiftl128 is called with value=32
+ *       Then the result upper is 1 and lower is 0xFFFFFFFF00000000
+ *
+ *     @id-scen-shift-63
+ *     @verified-by-unittest
+ *     @unittest-name-test_shiftl128_shift_63
+ *     Scenario: Shift by 63
+ *       Given a uint128 with upper=0 lower=0x0000000000000003
+ *       When shiftl128 is called with value=63
+ *       Then the result upper is 1 and lower is 0x8000000000000000
+ *
+ *   @id-rule-shift-65-to-127
+ *   Rule: Shift by 65..127: lower shifts into upper position, lower zeroed
+ *     * constraint: Only lower bits contribute to upper, shifted by (value-64); lower is 0
+ *
+ *     @id-scen-shift-65
+ *     @verified-by-unittest
+ *     @unittest-name-test_shiftl128_shift_65
+ *     Scenario: Shift by 65
+ *       Given a uint128 with upper=0xFF lower=0x0000000000000001
+ *       When shiftl128 is called with value=65
+ *       Then the result upper is 2 and lower is 0
+ *
+ *     @id-scen-shift-96
+ *     @verified-by-unittest
+ *     @unittest-name-test_shiftl128_shift_96
+ *     Scenario: Shift by 96
+ *       Given a uint128 with upper=0 lower=0x00000000DEADBEEF
+ *       When shiftl128 is called with value=96
+ *       Then the result upper is 0xDEADBEEF00000000 and lower is 0
+ *
+ *     @id-scen-shift-127
+ *     @verified-by-unittest
+ *     @unittest-name-test_shiftl128_shift_127
+ *     Scenario: Shift by 127
+ *       Given a uint128 with upper=0 lower=1
+ *       When shiftl128 is called with value=127
+ *       Then the result upper is 0x8000000000000000 and lower is 0
+ * ```
+ */
 void shiftl128(const uint128_t *const number, uint32_t value, uint128_t *const target) {
     if (value >= 128) {
         clear128(target);
