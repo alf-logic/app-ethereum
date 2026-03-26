@@ -44,48 +44,6 @@ void clear128(uint128_t *const target) {
     LOWER_P(target) = 0;
 }
 
-/*@
-  axiomatic Uint128Math {
-    logic integer uint128_val(uint128_t v) =
-      v.elements[0] * 0x10000000000000000 + v.elements[1];
-
-    logic integer pow2(integer n);
-    axiom pow2_0: pow2(0) == 1;
-    axiom pow2_pos: \forall integer n; n > 0 ==> pow2(n) == 2 * pow2(n - 1);
-  }
-
-  requires \valid_read(number);
-  requires \valid(target);
-
-  assigns target->elements[0], target->elements[1];
-
-  ensures value >= 128 ==>
-    target->elements[0] == 0 && target->elements[1] == 0;
-
-  ensures value == 64 ==>
-    target->elements[0] == \old(number->elements[1]) &&
-    target->elements[1] == 0;
-
-  ensures value == 0 ==>
-    target->elements[0] == \old(number->elements[0]) &&
-    target->elements[1] == \old(number->elements[1]);
-
-  ensures 0 < value < 64 ==>
-    target->elements[0] ==
-      ((\old(number->elements[0]) << value) +
-       (\old(number->elements[1]) >> (64 - value))) % 0x10000000000000000 &&
-    target->elements[1] ==
-      (\old(number->elements[1]) << value) % 0x10000000000000000;
-
-  ensures 64 < value < 128 ==>
-    target->elements[0] ==
-      (\old(number->elements[1]) << (value - 64)) % 0x10000000000000000 &&
-    target->elements[1] == 0;
-
-  ensures value < 128 ==>
-    uint128_val(*target) ==
-      (uint128_val(\old(*number)) * pow2(value)) % pow2(128);
-*/
 /**
  * ```gherkin
  * @id-feat-shiftl128
@@ -95,6 +53,7 @@ void clear128(uint128_t *const target) {
  *   two 64-bit halves: elements[0] (upper) and elements[1] (lower).
  *
  *   @id-rule-overflow
+ *   @acsl-behavior-overflow
  *   Rule: Shift amount >= 128 produces zero
  *     * constraint: Any shift of 128 or more bits zeros out all 128 bits
  *
@@ -123,6 +82,7 @@ void clear128(uint128_t *const target) {
  *       Then the result upper is 0 and lower is 0
  *
  *   @id-rule-shift-64
+ *   @acsl-behavior-shift_64
  *   Rule: Shift by exactly 64 moves lower half to upper, zeros lower
  *     * constraint: The lower 64 bits become the upper 64 bits; lower becomes 0
  *
@@ -143,6 +103,7 @@ void clear128(uint128_t *const target) {
  *       Then the result upper is 0xFFFFFFFFFFFFFFFF and lower is 0
  *
  *   @id-rule-shift-0
+ *   @acsl-behavior-identity
  *   Rule: Shift by 0 is identity
  *     * constraint: The result equals the input exactly
  *
@@ -163,6 +124,7 @@ void clear128(uint128_t *const target) {
  *       Then the result upper is 0 and lower is 0
  *
  *   @id-rule-shift-lt-64
+ *   @acsl-behavior-shift_lt_64
  *   Rule: Shift by 1..63 bits crosses the half boundary
  *     * constraint: Bits shift left within lower, overflow carries into upper
  *
@@ -191,6 +153,7 @@ void clear128(uint128_t *const target) {
  *       Then the result upper is 1 and lower is 0x8000000000000000
  *
  *   @id-rule-shift-65-to-127
+ *   @acsl-behavior-shift_65_to_127
  *   Rule: Shift by 65..127: lower shifts into upper position, lower zeroed
  *     * constraint: Only lower bits contribute to upper, shifted by (value-64); lower is 0
  *
@@ -219,6 +182,56 @@ void clear128(uint128_t *const target) {
  *       Then the result upper is 0x8000000000000000 and lower is 0
  * ```
  */
+/*@
+  axiomatic Uint128Math {
+    logic integer uint128_val(uint128_t v) =
+      v.elements[0] * 0x10000000000000000 + v.elements[1];
+
+    logic integer pow2(integer n);
+    axiom pow2_0: pow2(0) == 1;
+    axiom pow2_pos: \forall integer n; n > 0 ==> pow2(n) == 2 * pow2(n - 1);
+  }
+
+  requires \valid_read(number);
+  requires \valid(target);
+
+  assigns target->elements[0], target->elements[1];
+
+  behavior overflow:
+    assumes value >= 128;
+    ensures target->elements[0] == 0 && target->elements[1] == 0;
+
+  behavior shift_64:
+    assumes value == 64;
+    ensures target->elements[0] == \old(number->elements[1]) &&
+            target->elements[1] == 0;
+
+  behavior identity:
+    assumes value == 0;
+    ensures target->elements[0] == \old(number->elements[0]) &&
+            target->elements[1] == \old(number->elements[1]);
+
+  behavior shift_lt_64:
+    assumes 0 < value < 64;
+    ensures target->elements[0] ==
+      ((\old(number->elements[0]) << value) +
+       (\old(number->elements[1]) >> (64 - value))) % 0x10000000000000000 &&
+            target->elements[1] ==
+      (\old(number->elements[1]) << value) % 0x10000000000000000;
+
+  behavior shift_65_to_127:
+    assumes 64 < value < 128;
+    ensures target->elements[0] ==
+      (\old(number->elements[1]) << (value - 64)) % 0x10000000000000000 &&
+            target->elements[1] == 0;
+
+  complete behaviors;
+  disjoint behaviors;
+
+  ensures value < 128 ==>
+    uint128_val(*target) ==
+      (uint128_val(\old(*number)) * pow2(value)) % pow2(128);
+*/
 void shiftl128(const uint128_t *const number, uint32_t value, uint128_t *const target) {
     if (value >= 128) {
         clear128(target);
