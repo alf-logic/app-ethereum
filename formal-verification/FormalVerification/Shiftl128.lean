@@ -8,6 +8,119 @@
       else if (value < 64)    { UPPER = (UPPER << v) + (LOWER >> (64-v)); LOWER = LOWER << v; }
       else                    { UPPER = LOWER << (v-64); LOWER = 0; }
   }
+
+  ```gherkin
+  @id-feat-shiftl128
+  Feature: shiftl128
+    Left-shift a 128-bit unsigned integer by a given number of bits,
+    storing the result in target. The 128-bit value is represented as
+    two 64-bit halves: elements[0] (upper) and elements[1] (lower).
+
+    @id-rule-overflow
+    @acsl-behavior-overflow
+    Rule: Shift amount >= 128 produces zero
+      * constraint: Any shift of 128 or more bits zeros out all 128 bits
+
+      @id-scen-shift-128
+      @verified-by-unittest
+      @unittest-name-test_shiftl128_shift_128_clears
+      @verified-by-lean
+      @lean-name-test_shiftl128_shift_128_clears
+      Scenario: Shift by exactly 128
+        Given a uint128 with upper=0xAAAAAAAAAAAAAAAA lower=0xBBBBBBBBBBBBBBBB
+        When shiftl128 is called with value=128
+        Then the result upper is 0 and lower is 0
+
+      @id-scen-shift-200
+      @verified-by-unittest
+      @unittest-name-test_shiftl128_shift_200_clears
+      @verified-by-lean
+      @lean-name-test_shiftl128_shift_200_clears
+      Scenario: Shift by 200 (well above 128)
+        Given a uint128 with upper=0xFFFFFFFFFFFFFFFF lower=0xFFFFFFFFFFFFFFFF
+        When shiftl128 is called with value=200
+        Then the result upper is 0 and lower is 0
+
+    @id-rule-shift-64
+    @acsl-behavior-shift_64
+    Rule: Shift by exactly 64 moves lower half to upper, zeros lower
+      * constraint: The lower 64 bits become the upper 64 bits; lower becomes 0
+
+      @id-scen-shift-64-typical
+      @verified-by-unittest
+      @unittest-name-test_shiftl128_shift_64_moves_lower_to_upper
+      @verified-by-lean
+      @lean-name-test_shiftl128_shift_64_moves_lower_to_upper
+      Scenario: Shift by 64 with typical value
+        Given a uint128 with upper=0x1111111111111111 lower=0x2222222222222222
+        When shiftl128 is called with value=64
+        Then the result upper is 0x2222222222222222 and lower is 0
+
+    @id-rule-shift-0
+    @acsl-behavior-identity
+    Rule: Shift by 0 is identity
+      * constraint: The result equals the input exactly
+
+      @id-scen-shift-0-nonzero
+      @verified-by-unittest
+      @unittest-name-test_shiftl128_shift_0_identity
+      @verified-by-lean
+      @lean-name-test_shiftl128_shift_0_identity
+      Scenario: Shift by 0 preserves value
+        Given a uint128 with upper=0xDEADBEEFDEADBEEF lower=0xCAFEBABECAFEBABE
+        When shiftl128 is called with value=0
+        Then the result upper is 0xDEADBEEFDEADBEEF and lower is 0xCAFEBABECAFEBABE
+
+    @id-rule-shift-lt-64
+    @acsl-behavior-shift_lt_64
+    Rule: Shift by 1..63 bits crosses the half boundary
+      * constraint: Bits shift left within lower, overflow carries into upper
+
+      @id-scen-shift-1
+      @verified-by-unittest
+      @unittest-name-test_shiftl128_shift_1
+      @verified-by-lean
+      @lean-name-test_shiftl128_shift_1
+      Scenario: Shift by 1 propagates MSB of lower into upper
+        Given a uint128 with upper=0 lower=0x8000000000000000
+        When shiftl128 is called with value=1
+        Then the result upper is 1 and lower is 0
+
+      @id-scen-shift-63
+      @verified-by-unittest
+      @unittest-name-test_shiftl128_shift_63
+      @verified-by-lean
+      @lean-name-test_shiftl128_shift_63
+      Scenario: Shift by 63
+        Given a uint128 with upper=0 lower=0x0000000000000003
+        When shiftl128 is called with value=63
+        Then the result upper is 1 and lower is 0x8000000000000000
+
+    @id-rule-shift-65-to-127
+    @acsl-behavior-shift_65_to_127
+    Rule: Shift by 65..127: lower shifts into upper position, lower zeroed
+      * constraint: Only lower bits contribute to upper, shifted by (value-64); lower is 0
+
+      @id-scen-shift-65
+      @verified-by-unittest
+      @unittest-name-test_shiftl128_shift_65
+      @verified-by-lean
+      @lean-name-test_shiftl128_shift_65
+      Scenario: Shift by 65
+        Given a uint128 with upper=0xFF lower=0x0000000000000001
+        When shiftl128 is called with value=65
+        Then the result upper is 2 and lower is 0
+
+      @id-scen-shift-127
+      @verified-by-unittest
+      @unittest-name-test_shiftl128_shift_127
+      @verified-by-lean
+      @lean-name-test_shiftl128_shift_127
+      Scenario: Shift by 127
+        Given a uint128 with upper=0 lower=1
+        When shiftl128 is called with value=127
+        Then the result upper is 0x8000000000000000 and lower is 0
+  ```
 -/
 
 import FormalVerification.Basic
