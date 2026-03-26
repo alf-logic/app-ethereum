@@ -59,14 +59,19 @@ if(NOT LIBBSD_FOUND)
   endif()
 endif()
 
-add_compile_options(-Wall -Wextra -g -pedantic --coverage)
+add_compile_options(-Wall -Wextra -g -pedantic)
 # Flag depending on the Build Type
 set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O0")
 set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE}-O3")
 
-set(GCC_COVERAGE_LINK_FLAGS "--coverage -lgcov")
-set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${GCC_COVERAGE_LINK_FLAGS}")
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${GCC_COVERAGE_LINK_FLAGS}")
+# Coverage flags — only when gcov is available (Linux/GCC, not macOS/AppleClang)
+find_program(GCOV_EXECUTABLE gcov)
+if(GCOV_EXECUTABLE AND NOT CMAKE_C_COMPILER_ID STREQUAL "AppleClang")
+  add_compile_options(--coverage)
+  set(GCC_COVERAGE_LINK_FLAGS "--coverage -lgcov")
+  set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${GCC_COVERAGE_LINK_FLAGS}")
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${GCC_COVERAGE_LINK_FLAGS}")
+endif()
 
 set(APP_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../src")
 set(SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
@@ -95,6 +100,9 @@ include_directories(
   ${BOLOS_SDK}/include
   ${LIBBSD_INCLUDE_DIRS}
 )
+
+# SDK-dependent tests — only built when BOLOS_SDK headers are available
+if(EXISTS "${BOLOS_SDK}/lib_standard_app/format.c")
 
 # Network parameter test
 add_executable(test_param_network
@@ -262,3 +270,25 @@ target_link_libraries(test_field_validation PUBLIC
 )
 
 add_test(test_field_validation test_field_validation)
+
+endif() # BOLOS_SDK available
+
+# shiftl128 unit test (pure math — no SDK dependencies)
+set(STUB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/stubs")
+
+# Find cmocka via Homebrew if not already found
+find_library(CMOCKA_LIB cmocka HINTS /opt/homebrew/opt/cmocka/lib /usr/local/lib)
+find_path(CMOCKA_INCLUDE cmocka.h HINTS /opt/homebrew/opt/cmocka/include /usr/local/include)
+
+add_executable(test_shiftl128
+  ${SRC_DIR}/test_shiftl128.c
+  ${APP_DIR}/uint128.c
+  ${STUB_DIR}/utils_stubs.c
+)
+
+target_include_directories(test_shiftl128 BEFORE PRIVATE ${STUB_DIR} ${CMOCKA_INCLUDE})
+target_link_libraries(test_shiftl128 PUBLIC
+                      ${CMOCKA_LIB}
+)
+
+add_test(test_shiftl128 test_shiftl128)
