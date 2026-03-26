@@ -73,14 +73,6 @@ void clear128(uint128_t *const target) {
  *       When shiftl128 is called with value=200
  *       Then the result upper is 0 and lower is 0
  *
- *     @id-scen-shift-max-u32
- *     @verified-by-unittest
- *     @unittest-name-test_shiftl128_shift_max_uint32_clears
- *     Scenario: Shift by UINT32_MAX
- *       Given a uint128 with upper=1 lower=1
- *       When shiftl128 is called with value=4294967295
- *       Then the result upper is 0 and lower is 0
- *
  *   @id-rule-shift-64
  *   @acsl-behavior-shift_64
  *   Rule: Shift by exactly 64 moves lower half to upper, zeros lower
@@ -93,14 +85,6 @@ void clear128(uint128_t *const target) {
  *       Given a uint128 with upper=0x1111111111111111 lower=0x2222222222222222
  *       When shiftl128 is called with value=64
  *       Then the result upper is 0x2222222222222222 and lower is 0
- *
- *     @id-scen-shift-64-max-lower
- *     @verified-by-unittest
- *     @unittest-name-test_shiftl128_shift_64_max_lower
- *     Scenario: Shift by 64 with max lower
- *       Given a uint128 with upper=0 lower=0xFFFFFFFFFFFFFFFF
- *       When shiftl128 is called with value=64
- *       Then the result upper is 0xFFFFFFFFFFFFFFFF and lower is 0
  *
  *   @id-rule-shift-0
  *   @acsl-behavior-identity
@@ -115,14 +99,6 @@ void clear128(uint128_t *const target) {
  *       When shiftl128 is called with value=0
  *       Then the result upper is 0xDEADBEEFDEADBEEF and lower is 0xCAFEBABECAFEBABE
  *
- *     @id-scen-shift-0-zero
- *     @verified-by-unittest
- *     @unittest-name-test_shiftl128_shift_0_zero_stays_zero
- *     Scenario: Shift zero by 0
- *       Given a uint128 with upper=0 lower=0
- *       When shiftl128 is called with value=0
- *       Then the result upper is 0 and lower is 0
- *
  *   @id-rule-shift-lt-64
  *   @acsl-behavior-shift_lt_64
  *   Rule: Shift by 1..63 bits crosses the half boundary
@@ -135,14 +111,6 @@ void clear128(uint128_t *const target) {
  *       Given a uint128 with upper=0 lower=0x8000000000000000
  *       When shiftl128 is called with value=1
  *       Then the result upper is 1 and lower is 0
- *
- *     @id-scen-shift-32
- *     @verified-by-unittest
- *     @unittest-name-test_shiftl128_shift_32
- *     Scenario: Shift by 32
- *       Given a uint128 with upper=0 lower=0x00000001FFFFFFFF
- *       When shiftl128 is called with value=32
- *       Then the result upper is 1 and lower is 0xFFFFFFFF00000000
  *
  *     @id-scen-shift-63
  *     @verified-by-unittest
@@ -164,14 +132,6 @@ void clear128(uint128_t *const target) {
  *       Given a uint128 with upper=0xFF lower=0x0000000000000001
  *       When shiftl128 is called with value=65
  *       Then the result upper is 2 and lower is 0
- *
- *     @id-scen-shift-96
- *     @verified-by-unittest
- *     @unittest-name-test_shiftl128_shift_96
- *     Scenario: Shift by 96
- *       Given a uint128 with upper=0 lower=0x00000000DEADBEEF
- *       When shiftl128 is called with value=96
- *       Then the result upper is 0xDEADBEEF00000000 and lower is 0
  *
  *     @id-scen-shift-127
  *     @verified-by-unittest
