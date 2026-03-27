@@ -192,6 +192,7 @@ void clear128(uint128_t *const target) {
     uint128_val(*target) ==
       (uint128_val(\old(*number)) * pow2(value)) % pow2(128);
 */
+#ifndef USE_LLVM_SHIFTL128
 void shiftl128(const uint128_t *const number, uint32_t value, uint128_t *const target) {
     if (value >= 128) {
         clear128(target);
@@ -208,6 +209,7 @@ void shiftl128(const uint128_t *const number, uint32_t value, uint128_t *const t
         LOWER_P(target) = 0;
     }
 }
+#endif
 
 void shiftr128(const uint128_t *const number, uint32_t value, uint128_t *const target) {
     if (value >= 128) {

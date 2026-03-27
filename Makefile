@@ -172,5 +172,11 @@ include makefile_conf/features.mk
 
 #########################
 
+# Optional: use LLVM-compiled shiftl128 from formal verification
+ifdef USE_LLVM_SHIFTL128
+    DEFINES += USE_LLVM_SHIFTL128
+    LDLIBS += formal-verification/shiftl128_arm.o
+endif
+
 # Import generic rules from the SDK
 include $(BOLOS_SDK)/Makefile.standard_app
