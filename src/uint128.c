@@ -463,9 +463,13 @@ void convertUint128BE(const uint8_t *const data, uint32_t length, uint128_t *con
     uint8_t tmp[INT128_LENGTH];
 
     if (data == NULL || target == NULL || length == 0) {
+        if (target != NULL) {
+            clear128(target);
+        }
         return;
     }
     if (length > sizeof(tmp)) {
+        clear128(target);
         return;
     }
 
