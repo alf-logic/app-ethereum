@@ -20,6 +20,13 @@ __version__.py
 .idea
 .env
 
+# Formal verification build artifacts
+formal-verification/*.o
+formal-verification/ffi_test
+formal-verification/bug-tests/t[0-9]*
+formal-verification/bug-tests/test_*[!.c]
+*.dSYM/
+
 # Fuzzing
 tests/fuzzing/corpus/
 tests/fuzzing/out/
