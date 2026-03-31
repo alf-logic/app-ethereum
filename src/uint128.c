@@ -451,7 +451,7 @@ void convertUint64BEto128(const uint8_t *const data, uint32_t length, uint128_t 
 
     value = u64_from_BE(data, length);
     if (length > sizeof(tmp)) {
-        memset(tmp, 0, sizeof(tmp));
+        clear128(target);
         return;
     }
     memset(tmp, ((value < 0) ? 0xff : 0), sizeof(tmp) - length);
