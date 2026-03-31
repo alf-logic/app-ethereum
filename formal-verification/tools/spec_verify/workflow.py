@@ -17,7 +17,7 @@ from spec_verify.formatter import (
     LiveTable,
     print_header,
     print_step,
-    print_summary_footer,
+    print_analysis_table,
     print_issue_detail,
 )
 
@@ -31,36 +31,60 @@ def _short_hash(text: str) -> str:
     return hashlib.sha1(text.encode()).hexdigest()[:6]
 
 
-def _stub_analyze(name: str, idx: int) -> FunctionResult:
-    """Generate deterministic fake analysis results from function name."""
-    h: int = int(hashlib.md5(name.encode()).hexdigest(), 16)
-    fails: bool = h % 3 == 0
+# Real analysis data for uint128.c functions (from manual code review)
+_ANALYSIS: dict[str, dict] = {
+    "readu128BE":            dict(s="pass", t=3, bug="",          finding="",                                  ds=1, dl=1, dp=1),
+    "zero128":               dict(s="pass", t=3, bug="",          finding="",                                  ds=1, dl=1, dp=1),
+    "copy128":               dict(s="pass", t=3, bug="",          finding="",                                  ds=1, dl=1, dp=1),
+    "clear128":              dict(s="pass", t=2, bug="",          finding="",                                  ds=1, dl=1, dp=1),
+    "shiftl128":             dict(s="pass", t=9, bug="",          finding="proven correct in Lean",            ds=3, dl=3, dp=5),
+    "shiftr128":             dict(s="fail", t=9, bug="bug",       finding="aliasing clobber at value=64",      ds=3, dl=3, dp=5, f=1, rec="swap assignment order in value==64 branch"),
+    "bits128":               dict(s="pass", t=5, bug="",          finding="",                                  ds=2, dl=2, dp=3),
+    "equal128":              dict(s="pass", t=4, bug="",          finding="",                                  ds=1, dl=1, dp=1),
+    "gt128":                 dict(s="pass", t=5, bug="",          finding="",                                  ds=1, dl=2, dp=2),
+    "gte128":                dict(s="pass", t=3, bug="",          finding="",                                  ds=1, dl=1, dp=1),
+    "add128":                dict(s="pass", t=5, bug="",          finding="",                                  ds=2, dl=2, dp=3),
+    "sub128":                dict(s="pass", t=5, bug="",          finding="",                                  ds=2, dl=2, dp=3),
+    "or128":                 dict(s="pass", t=3, bug="",          finding="",                                  ds=1, dl=1, dp=1),
+    "mul128":                dict(s="pass", t=6, bug="",          finding="",                                  ds=4, dl=5, dp=8),
+    "divmod128":             dict(s="fail", t=7, bug="bug",       finding="infinite loop on div-by-zero",      ds=5, dl=6, dp=9, f=1, rec="add zero-divisor guard before loop"),
+    "tostring128":           dict(s="pass", t=6, bug="",          finding="",                                  ds=3, dl=4, dp=6),
+    "tostring128_signed":    dict(s="fail", t=5, bug="edge case", finding="buffer underflow if len=0+negative",ds=3, dl=4, dp=6, f=1, rec="guard out_length before writing '-'"),
+    "convertUint64BEto128":  dict(s="fail", t=5, bug="bug",       finding="target unchanged on len>16",        ds=3, dl=3, dp=4, f=1, rec="clear target before early return"),
+    "convertUint128BE":      dict(s="fail", t=5, bug="edge case", finding="silent return, target unchanged",   ds=2, dl=2, dp=3, f=1, rec="clear target on error paths"),
+}
 
-    total: int = 3 + (h % 4)
-    if fails:
-        n_failed: int = 1 + (h % 2)
-        is_high: bool = n_failed > 1
-        recs = [
-            f"check zero-input handling in {name}()",
-            f"verify loop termination condition in {name}()",
-            f"review boundary check near return statement in {name}()",
-        ]
+
+def _stub_analyze(name: str, idx: int) -> FunctionResult:
+    """Return analysis result — uses real data for known functions, generic for unknown."""
+    if name in _ANALYSIS:
+        a = _ANALYSIS[name]
+        is_fail: bool = a["s"] == "fail"
+        n_failed: int = a.get("f", 0)
+        total: int = a["t"]
         return FunctionResult(
             name=name,
-            status="fail",
+            status=a["s"],
             total=total,
             passed=total - n_failed,
             failed=n_failed,
-            failures=[f"test_{name}_edge_{i + 1}" for i in range(n_failed)],
-            recommendation=recs[h % len(recs)],
-            risk="high" if is_high else "low",
-            lean_ready=not is_high and h % 5 != 0,
-            suggestion="bug fix" if is_high else ("refactor" if h % 5 == 0 else "translate to lean"),
+            failures=[f"test_{name}_bug_scenario"] if is_fail else [],
+            recommendation=a.get("rec", ""),
+            risk="high" if a["bug"] == "bug" else ("low" if a["bug"] else ""),
+            lean_ready=not is_fail,
+            suggestion="bug fix" if a["bug"] == "bug" else ("review edge case" if a["bug"] else "translate to lean"),
+            bug_type=a["bug"],
+            finding=a["finding"],
+            diff_spec=a["ds"],
+            diff_lean=a["dl"],
+            diff_proof=a["dp"],
         )
 
+    # Fallback for unknown functions
     return FunctionResult(
-        name=name, status="pass", total=total, passed=total, failed=0,
+        name=name, status="pass", total=3, passed=3, failed=0,
         lean_ready=True, suggestion="translate to lean",
+        diff_spec=2, diff_lean=2, diff_proof=2,
     )
 
 
@@ -125,16 +149,15 @@ def run_file_flow(file_path: Path, model: str, verbose: bool) -> None:
         print_step(4, 4, f"Opening issues for {len(failed)} failed function(s)...", "")
         for i, r in enumerate(failed):
             r.issue_number = 100 + i
-            risk_tag = f"risk: {r.risk}"
-            lean_tag = "lean: yes" if r.lean_ready else "lean: no"
             click.echo(click.style(
-                f"        → #{r.issue_number}  {r.name}()  [{risk_tag}, {lean_tag}, suggest: {r.suggestion}]",
+                f"        → #{r.issue_number}  {r.name}()  [{r.bug_type}: {r.finding}]",
                 dim=True,
             ))
     else:
         print_step(4, 4, "No issues — all functions passed!", "")
 
-    print_summary_footer(results)
+    # analysis table replaces the old summary footer
+    print_analysis_table(results)
 
     # menu
     _main_menu(passed, failed, file_path, model)

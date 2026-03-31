@@ -1,4 +1,4 @@
-"""Display formatting — live table, steps, issue detail."""
+"""Display formatting — live table, analysis table, steps, issue detail."""
 
 from __future__ import annotations
 
@@ -18,8 +18,15 @@ class FunctionResult:
     recommendation: str = ""
     issue_number: int | None = None
     risk: str = ""  # "high" | "low"
-    lean_ready: bool = False  # can be translated to Lean
-    suggestion: str = ""  # "bug fix" | "refactor" | "translate to lean"
+    lean_ready: bool = False
+    suggestion: str = ""
+    # analysis fields
+    bug_type: str = ""  # "bug" | "edge case" | ""
+    finding: str = ""  # short description of what spec finds
+    diff_spec: int = 1  # difficulty: spec (1-10)
+    diff_lean: int = 1  # difficulty: lean translation (1-10)
+    diff_proof: int = 1  # difficulty: lean proof (1-10)
+    issue_url: str = ""  # full GH issue URL
 
 
 # ── Primitives ──────────────────────────────────────────────────
@@ -36,7 +43,7 @@ def print_step(step: int, total: int, msg: str, detail: str = "") -> None:
         click.echo(click.style(f"        → {detail}", dim=True))
 
 
-# ── Live table ──────────────────────────────────────────────────
+# ── Live table (progress) ──────────────────────────────────────
 
 
 class LiveTable:
@@ -97,16 +104,16 @@ class LiveTable:
         self.redraw()
 
     def batch_update(self, column: str, value: str) -> None:
-        """Set all cells in a column to the same value, single redraw."""
         for c in self.cells:
             c[column] = value
         self.redraw()
 
 
-# ── Summary footer ──────────────────────────────────────────────
+# ── Analysis table ─────────────────────────────────────────────
 
 
-def print_summary_footer(results: list[FunctionResult]) -> None:
+def print_analysis_table(results: list[FunctionResult]) -> None:
+    """Full analysis table with bug type, findings, difficulty, issues."""
     n_pass: int = sum(1 for r in results if r.status == "pass")
     n_fail: int = sum(1 for r in results if r.status == "fail")
 
@@ -115,17 +122,72 @@ def print_summary_footer(results: list[FunctionResult]) -> None:
         line += click.style(f", {n_fail} failed", fg="red")
     click.echo(line)
 
-    failed = [r for r in results if r.status == "fail"]
-    if failed:
-        click.echo()
-        name_w: int = max(len(r.name) for r in failed) + 2
-        for r in failed:
-            tag = f"#{r.issue_number}" if r.issue_number else "—"
-            risk_color = "red" if r.risk == "high" else "yellow"
-            risk_display = click.style(f"risk: {r.risk:<4}", fg=risk_color)
-            lean_display = click.style("lean: yes", fg="green") if r.lean_ready else click.style("lean: no ", fg="red")
-            sug = click.style(f"suggest: {r.suggestion}", fg="yellow")
-            click.echo(f"    {r.name:<{name_w}} → {tag:<8} {risk_display}  {lean_display}  {sug}")
+    name_w: int = max(len(r.name) for r in results) + 2
+    name_w = max(name_w, 14)
+
+    hdr = (
+        f"  {'#':>3}  {'Function':<{name_w}}"
+        f" {'Result':<7} {'Type':<11} {'Finding':<34}"
+        f" {'Spc':>3} {'Ln':>3} {'Prf':>3}  Issue"
+    )
+    bar_w = 3 + 2 + name_w + 7 + 11 + 34 + 4 + 4 + 4 + 8
+    bar = f"  {'─' * bar_w}"
+
+    click.echo(f"\n{hdr}")
+    click.echo(bar)
+
+    for i, r in enumerate(results):
+        # result
+        if r.status == "pass":
+            res = click.style("PASS", fg="green")
+            res_pad = "PASS"
+        else:
+            res = click.style("FAIL", fg="red")
+            res_pad = "FAIL"
+
+        # bug type
+        if r.bug_type == "bug":
+            btype = click.style(f"{'bug':<11}", fg="red")
+        elif r.bug_type == "edge case":
+            btype = click.style(f"{'edge case':<11}", fg="yellow")
+        else:
+            btype = f"{'—':<11}"
+
+        # finding
+        finding = r.finding if r.finding else "—"
+        finding_trunc = finding[:33]
+        finding_display = f"{finding_trunc:<34}"
+
+        # difficulty colors
+        def _diff_color(v: int) -> str:
+            if v <= 2:
+                return click.style(f"{v:>3}", fg="green")
+            elif v <= 5:
+                return click.style(f"{v:>3}", fg="yellow")
+            else:
+                return click.style(f"{v:>3}", fg="red")
+
+        spc = _diff_color(r.diff_spec)
+        ln = _diff_color(r.diff_lean)
+        prf = _diff_color(r.diff_proof)
+
+        # issue
+        if r.issue_url:
+            issue = click.style(f"#{r.issue_number}", fg="cyan")
+        elif r.issue_number:
+            issue = click.style(f"#{r.issue_number}", fg="cyan")
+        else:
+            issue = "—"
+
+        # We need to pad result manually since click.style adds invisible chars
+        res_extra = " " * (7 - len(res_pad))
+        click.echo(
+            f"  {i + 1:>3}  {r.name:<{name_w}}"
+            f" {res}{res_extra}{btype}{finding_display}"
+            f" {spc} {ln} {prf}  {issue}"
+        )
+
+    click.echo(bar)
 
 
 # ── Issue detail ────────────────────────────────────────────────
