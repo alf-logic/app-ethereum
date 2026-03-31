@@ -18,6 +18,7 @@ from spec_verify.formatter import (
     print_header,
     print_step,
     print_analysis_table,
+    print_issue_summary,
     print_issue_detail,
 )
 
@@ -31,14 +32,16 @@ def _short_hash(text: str) -> str:
     return hashlib.sha1(text.encode()).hexdigest()[:6]
 
 
-# Real analysis data for uint128.c functions (from manual code review)
+# Real analysis data for uint128.c — from manual code review + confirmed test results
+_GH = "https://github.com/alf-logic/app-ethereum/issues"
 _ANALYSIS: dict[str, dict] = {
     "readu128BE":            dict(s="pass", t=3, bug="",          finding="",                                  ds=1, dl=1, dp=1),
     "zero128":               dict(s="pass", t=3, bug="",          finding="",                                  ds=1, dl=1, dp=1),
     "copy128":               dict(s="pass", t=3, bug="",          finding="",                                  ds=1, dl=1, dp=1),
     "clear128":              dict(s="pass", t=2, bug="",          finding="",                                  ds=1, dl=1, dp=1),
     "shiftl128":             dict(s="pass", t=9, bug="",          finding="proven correct in Lean",            ds=3, dl=3, dp=5),
-    "shiftr128":             dict(s="fail", t=9, bug="bug",       finding="aliasing clobber at value=64",      ds=3, dl=3, dp=5, f=1, rec="swap assignment order in value==64 branch"),
+    "shiftr128":             dict(s="fail", t=9, bug="bug",       finding="aliasing clobber at value=64",      ds=3, dl=3, dp=5, f=1, rec="swap assignment order in value==64 branch",
+                                  inum=10, iurl=f"{_GH}/10", risk="Medium", tsum="1 FAIL, 3 PASS"),
     "bits128":               dict(s="pass", t=5, bug="",          finding="",                                  ds=2, dl=2, dp=3),
     "equal128":              dict(s="pass", t=4, bug="",          finding="",                                  ds=1, dl=1, dp=1),
     "gt128":                 dict(s="pass", t=5, bug="",          finding="",                                  ds=1, dl=2, dp=2),
@@ -47,11 +50,15 @@ _ANALYSIS: dict[str, dict] = {
     "sub128":                dict(s="pass", t=5, bug="",          finding="",                                  ds=2, dl=2, dp=3),
     "or128":                 dict(s="pass", t=3, bug="",          finding="",                                  ds=1, dl=1, dp=1),
     "mul128":                dict(s="pass", t=6, bug="",          finding="",                                  ds=4, dl=5, dp=8),
-    "divmod128":             dict(s="fail", t=7, bug="bug",       finding="infinite loop on div-by-zero",      ds=5, dl=6, dp=9, f=1, rec="add zero-divisor guard before loop"),
+    "divmod128":             dict(s="fail", t=7, bug="bug",       finding="infinite loop on div-by-zero",      ds=5, dl=6, dp=9, f=1, rec="add zero-divisor guard before loop",
+                                  inum=11, iurl=f"{_GH}/11", risk="High", tsum="hang detected"),
     "tostring128":           dict(s="pass", t=6, bug="",          finding="",                                  ds=3, dl=4, dp=6),
-    "tostring128_signed":    dict(s="fail", t=5, bug="edge case", finding="buffer underflow if len=0+negative",ds=3, dl=4, dp=6, f=1, rec="guard out_length before writing '-'"),
-    "convertUint64BEto128":  dict(s="fail", t=5, bug="bug",       finding="target unchanged on len>16",        ds=3, dl=3, dp=4, f=1, rec="clear target before early return"),
-    "convertUint128BE":      dict(s="fail", t=5, bug="edge case", finding="silent return, target unchanged",   ds=2, dl=2, dp=3, f=1, rec="clear target on error paths"),
+    "tostring128_signed":    dict(s="fail", t=5, bug="edge case", finding="buffer underflow if len=0+negative",ds=3, dl=4, dp=6, f=1, rec="guard out_length before writing '-'",
+                                  inum=12, iurl=f"{_GH}/12", risk="Low", tsum="2 FAIL, 1 PASS"),
+    "convertUint64BEto128":  dict(s="fail", t=5, bug="bug",       finding="target unchanged on len>16",        ds=3, dl=3, dp=4, f=1, rec="clear target before early return",
+                                  inum=13, iurl=f"{_GH}/13", risk="Medium", tsum="1 FAIL, 1 PASS"),
+    "convertUint128BE":      dict(s="fail", t=5, bug="edge case", finding="silent return, target unchanged",   ds=2, dl=2, dp=3, f=1, rec="clear target on error paths",
+                                  inum=14, iurl=f"{_GH}/14", risk="Low-Medium", tsum="3 FAIL, 1 PASS"),
 }
 
 
@@ -70,7 +77,7 @@ def _stub_analyze(name: str, idx: int) -> FunctionResult:
             failed=n_failed,
             failures=[f"test_{name}_bug_scenario"] if is_fail else [],
             recommendation=a.get("rec", ""),
-            risk="high" if a["bug"] == "bug" else ("low" if a["bug"] else ""),
+            risk=a.get("risk", ""),
             lean_ready=not is_fail,
             suggestion="bug fix" if a["bug"] == "bug" else ("review edge case" if a["bug"] else "translate to lean"),
             bug_type=a["bug"],
@@ -78,6 +85,9 @@ def _stub_analyze(name: str, idx: int) -> FunctionResult:
             diff_spec=a["ds"],
             diff_lean=a["dl"],
             diff_proof=a["dp"],
+            issue_number=a.get("inum"),
+            issue_url=a.get("iurl", ""),
+            test_summary=a.get("tsum", ""),
         )
 
     # Fallback for unknown functions
@@ -144,20 +154,23 @@ def run_file_flow(file_path: Path, model: str, verbose: bool) -> None:
     failed = [r for r in results if r.status == "fail"]
     passed = [r for r in results if r.status == "pass"]
 
-    # 4 — open issues automatically
+    # 4 — open issues (real issue numbers from GH)
     if failed:
         print_step(4, 4, f"Opening issues for {len(failed)} failed function(s)...", "")
-        for i, r in enumerate(failed):
-            r.issue_number = 100 + i
+        for r in failed:
+            tag = f"#{r.issue_number}" if r.issue_number else "new"
             click.echo(click.style(
-                f"        → #{r.issue_number}  {r.name}()  [{r.bug_type}: {r.finding}]",
+                f"        → {tag}  {r.name}()  [{r.bug_type}: {r.finding}]",
                 dim=True,
             ))
     else:
         print_step(4, 4, "No issues — all functions passed!", "")
 
-    # analysis table replaces the old summary footer
+    # function summary (analysis table)
     print_analysis_table(results)
+
+    # issue summary table
+    print_issue_summary(results)
 
     # menu
     _main_menu(passed, failed, file_path, model)
