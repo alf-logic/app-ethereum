@@ -336,6 +336,11 @@ void divmod128(const uint128_t *const l,
                const uint128_t *const r,
                uint128_t *const retDiv,
                uint128_t *const retMod) {
+    if (zero128(r)) {
+        clear128(retDiv);
+        clear128(retMod);
+        return;
+    }
     uint128_t copyd, adder, resDiv, resMod;
     uint128_t one;
     UPPER(one) = 0;

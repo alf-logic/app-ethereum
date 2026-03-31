@@ -58,44 +58,24 @@ static void alarm_handler(int sig) {
     timed_out = 1;
 }
 
-/* Bug scenario: division by zero causes infinite loop */
-static void test_divmod128_div_by_zero_hangs(void **state) {
+/* Fixed: division by zero now returns (0, 0) instead of hanging */
+static void test_divmod128_div_by_zero_returns(void **state) {
     (void) state;
-    uint128_t dividend = {{0, 42}};  /* upper=0, lower=42 */
-    uint128_t divisor  = {{0, 0}};   /* zero */
+    uint128_t dividend = {{0, 42}};
+    uint128_t divisor  = {{0, 0}};
     uint128_t quot, rem;
 
-    /* Set a 2-second alarm — if divmod128 doesn't return, it's hung */
-    timed_out = 0;
-    signal(SIGALRM, alarm_handler);
-    alarm(2);
+    /* Pre-fill with garbage to ensure they get cleared */
+    quot.elements[0] = 0xDEAD; quot.elements[1] = 0xBEEF;
+    rem.elements[0] = 0xDEAD; rem.elements[1] = 0xBEEF;
 
-    /* Fork to avoid killing the test runner */
-    pid_t pid = fork();
-    if (pid == 0) {
-        /* Child: call divmod128, should hang */
-        alarm(2);
-        divmod128(&dividend, &divisor, &quot, &rem);
-        _exit(0);  /* If we get here, no hang — unexpected */
-    }
+    divmod128(&dividend, &divisor, &quot, &rem);
 
-    /* Parent: wait for child with timeout */
-    int wstatus;
-    sleep(3);
-    int result = waitpid(pid, &wstatus, WNOHANG);
-
-    if (result == 0) {
-        /* Child still running after 3s — confirmed hang */
-        kill(pid, SIGKILL);
-        waitpid(pid, &wstatus, 0);
-        /* Test PASSES — we proved the hang exists */
-        assert_true(1);  /* hang confirmed */
-    } else {
-        /* Child exited — no hang, which means bug is fixed */
-        assert_true(0 && "divmod128 returned without hanging — bug may be fixed");
-    }
-
-    signal(SIGALRM, SIG_DFL);
+    /* After fix: should return cleanly with quot=0, rem=0 */
+    assert_int_equal(quot.elements[0], 0);
+    assert_int_equal(quot.elements[1], 0);
+    assert_int_equal(rem.elements[0], 0);
+    assert_int_equal(rem.elements[1], 0);
 }
 
 /* Control: normal division works */
@@ -130,7 +110,7 @@ static void test_divmod128_equal_operands(void **state) {
 
 int main(void) {
     const struct CMUnitTest tests[] = {
-        cmocka_unit_test(test_divmod128_div_by_zero_hangs),
+        cmocka_unit_test(test_divmod128_div_by_zero_returns),
         cmocka_unit_test(test_divmod128_normal_division),
         cmocka_unit_test(test_divmod128_equal_operands),
     };
