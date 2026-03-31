@@ -213,8 +213,8 @@ void shiftr128(const uint128_t *const number, uint32_t value, uint128_t *const t
     if (value >= 128) {
         clear128(target);
     } else if (value == 64) {
-        UPPER_P(target) = 0;
         LOWER_P(target) = UPPER_P(number);
+        UPPER_P(target) = 0;
     } else if (value == 0) {
         copy128(target, number);
     } else if (value < 64) {
