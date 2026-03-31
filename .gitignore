@@ -18,6 +18,7 @@ __version__.py
 
 .vscode
 .idea
+.env
 
 # Fuzzing
 tests/fuzzing/corpus/
