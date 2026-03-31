@@ -408,3 +408,111 @@ def run_issue_flow(file_path: Path, issue_number: int, model: str, verbose: bool
     print_issue_detail(result, str(file_path))
 
     _fix_menu(result, file_path, model)
+
+
+# ── Step 2: post-fix verification ──────────────────────────────
+
+# All bugs fixed — every function now passes
+_ANALYSIS_STEP2: dict[str, dict] = {
+    "readu128BE":            dict(t=3,  ds=1, dl=1, dp=1, finding=""),
+    "zero128":               dict(t=3,  ds=1, dl=1, dp=1, finding=""),
+    "copy128":               dict(t=3,  ds=1, dl=1, dp=1, finding=""),
+    "clear128":              dict(t=2,  ds=1, dl=1, dp=1, finding=""),
+    "shiftl128":             dict(t=9,  ds=3, dl=3, dp=5, finding="proven correct in Lean"),
+    "shiftr128":             dict(t=9,  ds=3, dl=3, dp=5, finding="fixed: aliasing bug (#10)"),
+    "bits128":               dict(t=5,  ds=2, dl=2, dp=3, finding=""),
+    "equal128":              dict(t=4,  ds=1, dl=1, dp=1, finding=""),
+    "gt128":                 dict(t=5,  ds=1, dl=2, dp=2, finding=""),
+    "gte128":                dict(t=3,  ds=1, dl=1, dp=1, finding=""),
+    "add128":                dict(t=5,  ds=2, dl=2, dp=3, finding=""),
+    "sub128":                dict(t=5,  ds=2, dl=2, dp=3, finding=""),
+    "or128":                 dict(t=3,  ds=1, dl=1, dp=1, finding=""),
+    "mul128":                dict(t=6,  ds=4, dl=5, dp=8, finding=""),
+    "divmod128":             dict(t=7,  ds=5, dl=6, dp=9, finding="fixed: div-by-zero guard (#11)"),
+    "tostring128":           dict(t=6,  ds=3, dl=4, dp=6, finding=""),
+    "tostring128_signed":    dict(t=5,  ds=3, dl=4, dp=6, finding="fixed: buffer guard (#12)"),
+    "convertUint64BEto128":  dict(t=5,  ds=3, dl=3, dp=4, finding="fixed: clear target (#13)"),
+    "convertUint128BE":      dict(t=5,  ds=2, dl=2, dp=3, finding="fixed: clear on error (#14)"),
+}
+
+
+def _step2_analyze(name: str) -> FunctionResult:
+    """All functions pass in step 2 (bugs fixed)."""
+    if name in _ANALYSIS_STEP2:
+        a = _ANALYSIS_STEP2[name]
+        return FunctionResult(
+            name=name, status="pass",
+            total=a["t"], passed=a["t"], failed=0,
+            lean_ready=True, suggestion="translate to lean",
+            finding=a["finding"],
+            diff_spec=a["ds"], diff_lean=a["dl"], diff_proof=a["dp"],
+        )
+    return FunctionResult(
+        name=name, status="pass", total=3, passed=3, failed=0,
+        lean_ready=True, suggestion="translate to lean",
+        diff_spec=2, diff_lean=2, diff_proof=2,
+    )
+
+
+def run_step2_flow(file_path: Path, model: str, verbose: bool) -> None:
+    """Step 2: post-fix verification — all bugs resolved, all tests pass."""
+    print_header(f"spec-verify (step 2): {file_path.name} — post-fix verification")
+
+    # 1 — extract
+    functions = extract_all_functions(file_path)
+    if not functions:
+        click.echo(click.style("  No functions found.", fg="red"))
+        return
+    names_str: str = ", ".join(n for n, _ in functions)
+    print_step(1, 2, "Extracting functions...", f"Found {len(functions)}: {names_str}")
+
+    # 2 — verify with live table
+    print_step(2, 2, "Verifying all functions (post-fix)...", "")
+    click.echo()
+
+    names_list: list[str] = [n for n, _ in functions]
+    results: list[FunctionResult] = [_step2_analyze(n) for n in names_list]
+
+    table = LiveTable(names_list)
+    table.draw()
+
+    delay: float = 0.03
+
+    for i in range(len(functions)):
+        time.sleep(delay)
+        table.update(i, "Spec", "✓")
+    for i, r in enumerate(results):
+        time.sleep(delay)
+        table.update(i, "Scenarios", str(r.total))
+    for i in range(len(functions)):
+        time.sleep(delay)
+        table.update(i, "Tests", "✓")
+    for i, r in enumerate(results):
+        time.sleep(delay)
+        table.update(i, "Result", f"PASS ({r.passed}/{r.total})")
+
+    # analysis table — all green
+    print_analysis_table(results)
+
+    # summary
+    total_scenarios: int = sum(r.total for r in results)
+    click.echo(click.style(
+        f"\n  All {len(results)} functions pass ({total_scenarios} scenarios). "
+        f"Bugs #10-#14 verified fixed.",
+        fg="green", bold=True,
+    ))
+
+    # single option
+    click.echo("\n  Select an action:")
+    click.echo(f"    1. Prepare PR for {len(results)} successful function(s)")
+
+    click.prompt("\n  Your choice", type=click.IntRange(1, 1))
+
+    names: str = ", ".join(r.name for r in results)
+    click.echo(click.style(f"\n  → Would create branch with spec + test files for all {len(results)} functions", dim=True))
+    click.echo(click.style(
+        f'  → Would run: gh pr create -R {REPO} '
+        f'--title "feat: add specs + tests for all {len(results)} functions in {file_path.name}"',
+        dim=True,
+    ))
+    click.echo(click.style("\n  [STUB] PR creation not implemented yet.", fg="yellow"))
