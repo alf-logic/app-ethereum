@@ -112,12 +112,13 @@ class LiveTable:
 # ── Analysis table (function summary) ──────────────────────────
 
 
-def _diff_color(v: int) -> str:
+def _diff_label(v: int) -> tuple[str, str]:
+    """Convert 1-10 score to easy/medium/hard with color."""
     if v <= 2:
-        return click.style(f"{v:>3}", fg="green")
+        return "easy", "green"
     elif v <= 5:
-        return click.style(f"{v:>3}", fg="yellow")
-    return click.style(f"{v:>3}", fg="red")
+        return "medium", "yellow"
+    return "hard", "red"
 
 
 def print_analysis_table(results: list[FunctionResult]) -> None:
@@ -130,59 +131,63 @@ def print_analysis_table(results: list[FunctionResult]) -> None:
         line += click.style(f", {n_fail} failed", fg="red")
     click.echo(line)
 
-    name_w: int = max(len(r.name) for r in results) + 2
-    name_w = max(name_w, 14)
+    nw: int = max(len(r.name) for r in results) + 2
+    nw = max(nw, 14)
+    dw: int = 8  # width for each difficulty column
 
-    # Header
     hdr = (
-        f"  {'#':>3}  {'Function':<{name_w}}"
-        f" {'Result':<7} {'Type':<11} {'Finding':<34}"
-        f" {'Risk':<8}"
-        f" {'D(spec)':>7} {'D(lean)':>7} {'D(proof)':>8}  Issue"
+        f"  {'#':>3}  {'Function':<{nw}} "
+        f"{'Result':<7} {'Type':<11} {'Finding':<32} "
+        f"{'Risk':<11} "
+        f"{'D(spec)':<{dw}} {'D(lean)':<{dw}} {'D(proof)':<{dw}} "
+        f"Issue"
     )
-    bar_w: int = 3 + 2 + name_w + 7 + 11 + 34 + 8 + 8 + 8 + 9 + 10
+    bar_w: int = 3 + 2 + nw + 1 + 7 + 11 + 32 + 1 + 11 + 1 + dw * 3 + 1 + 6
     bar = f"  {'─' * bar_w}"
 
     click.echo(f"\n{hdr}")
     click.echo(bar)
 
     for i, r in enumerate(results):
-        # result
+        # result column (pad manually for ANSI)
         if r.status == "pass":
-            res = click.style("PASS", fg="green")
-            res_pad = "PASS"
+            res = click.style("PASS", fg="green") + "   "
         else:
-            res = click.style("FAIL", fg="red")
-            res_pad = "FAIL"
+            res = click.style("FAIL", fg="red") + "   "
 
         # bug type
         if r.bug_type == "bug":
-            btype = click.style(f"{'bug':<11}", fg="red")
+            btype = click.style("bug", fg="red") + " " * 8
         elif r.bug_type == "edge case":
-            btype = click.style(f"{'edge case':<11}", fg="yellow")
+            btype = click.style("edge case", fg="yellow") + " " * 2
         else:
-            btype = f"{'—':<11}"
+            btype = "—" + " " * 10
 
         # finding
-        finding = r.finding if r.finding else "—"
-        finding_display = f"{finding[:33]:<34}"
+        finding = (r.finding if r.finding else "—")[:31]
+        finding_display = f"{finding:<32} "
 
         # risk
         if r.risk == "High":
-            risk_display = click.style(f"{'High':<8}", fg="red")
+            risk_d = click.style("High", fg="red") + " " * 7
         elif r.risk == "Medium":
-            risk_display = click.style(f"{'Medium':<8}", fg="yellow")
+            risk_d = click.style("Medium", fg="yellow") + " " * 5
         elif r.risk:
-            risk_display = click.style(f"{r.risk:<8}", fg="green")
+            rtext = r.risk[:10]
+            risk_d = click.style(rtext, fg="green") + " " * (11 - len(rtext))
         else:
-            risk_display = f"{'—':<8}"
+            risk_d = "—" + " " * 10
 
-        # difficulty
-        spc = _diff_color(r.diff_spec)
-        ln = _diff_color(r.diff_lean)
-        prf = _diff_color(r.diff_proof)
+        # difficulty (easy/medium/hard)
+        def _dcol(v: int) -> str:
+            label, color = _diff_label(v)
+            return click.style(label, fg=color) + " " * (dw - len(label))
 
-        # issue link
+        ds = _dcol(r.diff_spec)
+        dl = _dcol(r.diff_lean)
+        dp = _dcol(r.diff_proof)
+
+        # issue
         if r.issue_url:
             issue = click.style(f"#{r.issue_number}", fg="cyan", underline=True)
         elif r.issue_number:
@@ -190,12 +195,12 @@ def print_analysis_table(results: list[FunctionResult]) -> None:
         else:
             issue = "—"
 
-        res_extra = " " * (7 - len(res_pad))
         click.echo(
-            f"  {i + 1:>3}  {r.name:<{name_w}}"
-            f" {res}{res_extra}{btype}{finding_display}"
-            f" {risk_display}"
-            f"    {spc}    {ln}     {prf}  {issue}"
+            f"  {i + 1:>3}  {r.name:<{nw}} "
+            f"{res}{btype}{finding_display}"
+            f"{risk_d}"
+            f"{ds}{dl}{dp}"
+            f"{issue}"
         )
 
     click.echo(bar)
@@ -247,6 +252,46 @@ def print_issue_summary(results: list[FunctionResult]) -> None:
             f"  {i:>3}  {url_display}  "
             f"{r.name:<{name_w}} {btype}{test_res:<16} {risk}"
         )
+
+    click.echo(bar)
+
+
+# ── Fix / PR summary table ─────────────────────────────────────
+
+
+@dataclass
+class FixResult:
+    issue_number: int
+    issue_url: str
+    branch: str
+    fix_desc: str
+    tests: str  # e.g. "4/4 PASS"
+    pr_url: str
+
+
+def print_fix_summary(fixes: list[FixResult]) -> None:
+    """Table of completed fixes with issue, branch, fix, tests, PR."""
+    click.echo(click.style(f"\n  Fix Summary ({len(fixes)} PRs created)", bold=True))
+
+    iw: int = max(len(f.issue_url) for f in fixes) + 1
+    bw: int = max(len(f.branch) for f in fixes) + 1
+    fw: int = max(len(f.fix_desc) for f in fixes) + 1
+    tw: int = 7
+    pw: int = max(len(f.pr_url) for f in fixes) + 1
+
+    hdr = f"  {'#':>3}  {'Issue':<{iw}} {'Branch':<{bw}} {'Fix':<{fw}} {'Tests':<{tw}} PR"
+    bar_w = 3 + 2 + iw + bw + fw + tw + pw + 6
+    bar = f"  {'─' * bar_w}"
+
+    click.echo(f"\n{hdr}")
+    click.echo(bar)
+
+    for i, f in enumerate(fixes, 1):
+        issue = click.style(f"{f.issue_url:<{iw}}", fg="cyan")
+        branch = click.style(f"{f.branch:<{bw}}", fg="yellow")
+        tests = click.style(f"{f.tests:<{tw}}", fg="green")
+        pr = click.style(f.pr_url, fg="cyan")
+        click.echo(f"  {i:>3}  {issue} {branch} {f.fix_desc:<{fw}} {tests} {pr}")
 
     click.echo(bar)
 
