@@ -437,6 +437,81 @@ bool tostring128_signed(const uint128_t *const number,
     return tostring128(number, base, out, out_length);  // positive value
 }
 
+/**
+ * ```gherkin
+ * @id-feat-convert-uint64-be-to-128
+ * Feature: convertUint64BEto128
+ *   Converts a big-endian byte array into a uint128_t with sign extension.
+ *   Interprets the data as a signed int64, then sign-extends to 128 bits:
+ *   positive values get 0x00 padding, negative values get 0xFF padding.
+ *
+ *   @id-rule-overflow-length
+ *   Rule: Length exceeding INT128_LENGTH triggers early return
+ *     * constraint: When length > 16, target is NOT modified
+ *     * constraint: u64_from_BE is called BEFORE the length check (known issue)
+ *
+ *     @id-scen-length-17
+ *     @verified-by-unittest
+ *     @unittest-name-test_convertUint64BEto128_length_exceeds
+ *     Scenario: Length 17 triggers early return
+ *       Given data is 17 bytes of 0xFF
+ *       And target is pre-initialized to upper=0x1234 lower=0x5678
+ *       When convertUint64BEto128 is called with length=17
+ *       Then target remains upper=0x1234 lower=0x5678
+ *
+ *   @id-rule-positive-value
+ *   Rule: Non-negative int64 values are zero-padded to 128 bits
+ *     * constraint: Upper bytes filled with 0x00
+ *
+ *     @id-scen-single-byte-positive
+ *     @verified-by-unittest
+ *     @unittest-name-test_convertUint64BEto128_single_byte_positive
+ *     Scenario: Single byte 0x42
+ *       Given data is [0x42]
+ *       When convertUint64BEto128 is called with length=1
+ *       Then target upper is 0 and lower is 0x42
+ *
+ *     @id-scen-eight-bytes-positive
+ *     @verified-by-unittest
+ *     @unittest-name-test_convertUint64BEto128_eight_bytes_positive
+ *     Scenario: Eight bytes representing 256
+ *       Given data is [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00]
+ *       When convertUint64BEto128 is called with length=8
+ *       Then target upper is 0 and lower is 0x100
+ *
+ *   @id-rule-negative-value
+ *   Rule: Negative int64 values are sign-extended with 0xFF padding
+ *     * constraint: Upper bytes filled with 0xFF when high bit is set
+ *
+ *     @id-scen-negative-one
+ *     @verified-by-unittest
+ *     @unittest-name-test_convertUint64BEto128_negative_one
+ *     Scenario: Eight bytes 0xFF..FF (value -1 as int64)
+ *       Given data is [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]
+ *       When convertUint64BEto128 is called with length=8
+ *       Then target upper is 0xFFFFFFFFFFFFFFFF and lower is 0xFFFFFFFFFFFFFFFF
+ *
+ *     @id-scen-high-bit-set
+ *     @verified-by-unittest
+ *     @unittest-name-test_convertUint64BEto128_high_bit_set
+ *     Scenario: Eight bytes with high bit set (0x80...)
+ *       Given data is [0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+ *       When convertUint64BEto128 is called with length=8
+ *       Then target upper is 0xFFFFFFFFFFFFFFFF and lower is 0x8000000000000000
+ *
+ *   @id-rule-zero-length
+ *   Rule: Zero-length input
+ *     * constraint: All 16 bytes of tmp are zero-padded, result is zero
+ *
+ *     @id-scen-zero-length
+ *     @verified-by-unittest
+ *     @unittest-name-test_convertUint64BEto128_zero_length
+ *     Scenario: Zero-length input produces zero
+ *       Given data is empty
+ *       When convertUint64BEto128 is called with length=0
+ *       Then target upper is 0 and lower is 0
+ * ```
+ */
 void convertUint64BEto128(const uint8_t *const data, uint32_t length, uint128_t *const target) {
     uint8_t tmp[INT128_LENGTH];
     int64_t value;
