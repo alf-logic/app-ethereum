@@ -428,6 +428,9 @@ bool tostring128_signed(const uint128_t *const number,
         divmod128(&max_unsigned_val, &two_val, &max_signed_val, &tmp);
         if (gt128(number, &max_signed_val))  // negative value
         {
+            if (out_length < 2) {
+                return false;
+            }
             sub128(&max_unsigned_val, number, &tmp);
             add128(&tmp, &one_val, &tmp);
             out[0] = '-';
