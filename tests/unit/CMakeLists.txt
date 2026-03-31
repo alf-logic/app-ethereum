@@ -273,9 +273,26 @@ add_test(test_field_validation test_field_validation)
 
 endif() # BOLOS_SDK available
 
-# shiftl128 unit test (pure math — no SDK dependencies)
+# uint128 unit tests (pure math — no SDK dependencies)
 set(STUB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/stubs")
 
 # Find cmocka via Homebrew if not already found
 find_library(CMOCKA_LIB cmocka HINTS /opt/homebrew/opt/cmocka/lib /usr/local/lib)
 find_path(CMOCKA_INCLUDE cmocka.h HINTS /opt/homebrew/opt/cmocka/include /usr/local/include)
+
+set(UINT128_TESTS
+  readu128BE zero128 copy128 clear128 shiftl128 shiftr128 bits128
+  equal128 gt128 gte128 add128 sub128 or128 mul128 divmod128
+  tostring128 tostring128_signed convertUint64BEto128 convertUint128BE
+)
+
+foreach(TEST_NAME ${UINT128_TESTS})
+  add_executable(test_${TEST_NAME}
+    ${SRC_DIR}/test_${TEST_NAME}.c
+    ${APP_DIR}/uint128.c
+    ${STUB_DIR}/utils_stubs.c
+  )
+  target_include_directories(test_${TEST_NAME} BEFORE PRIVATE ${STUB_DIR} ${CMOCKA_INCLUDE})
+  target_link_libraries(test_${TEST_NAME} PUBLIC ${CMOCKA_LIB})
+  add_test(test_${TEST_NAME} test_${TEST_NAME})
+endforeach()
