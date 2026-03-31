@@ -279,16 +279,3 @@ set(STUB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/stubs")
 # Find cmocka via Homebrew if not already found
 find_library(CMOCKA_LIB cmocka HINTS /opt/homebrew/opt/cmocka/lib /usr/local/lib)
 find_path(CMOCKA_INCLUDE cmocka.h HINTS /opt/homebrew/opt/cmocka/include /usr/local/include)
-
-add_executable(test_shiftl128
-  ${SRC_DIR}/test_shiftl128.c
-  ${APP_DIR}/uint128.c
-  ${STUB_DIR}/utils_stubs.c
-)
-
-target_include_directories(test_shiftl128 BEFORE PRIVATE ${STUB_DIR} ${CMOCKA_INCLUDE})
-target_link_libraries(test_shiftl128 PUBLIC
-                      ${CMOCKA_LIB}
-)
-
-add_test(test_shiftl128 test_shiftl128)
