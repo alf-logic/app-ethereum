@@ -173,36 +173,40 @@ class LeanTable:
 # ── Lean summary table ─────────────────────────────────────────
 
 
+def _styled_pad(text: str, styled: str, width: int) -> str:
+    """Pad a styled string to a fixed visible width."""
+    return styled + " " * (width - len(text))
+
+
 def print_lean_summary(results: list[FunctionResult]) -> None:
     """Summary table with proof difficulty for Lean pipeline."""
     nw: int = max(len(r.name) for r in results) + 2
-    dw: int = 8
+    cw, tw, thw, pw, dw = 8, 8, 11, 9, 13
 
     hdr = (
         f"  {'#':>3}  {'Function':<{nw}} "
-        f"{'Code':<6} {'Tests':<7} {'Theorems':<10} {'Proofs':<8} "
-        f"{'D(proof)':<{dw}} Status"
+        f"{'Code':<{cw}}{'Tests':<{tw}}{'Theorems':<{thw}}{'Proofs':<{pw}}"
+        f"{'Difficulty':<{dw}}Status"
     )
-    bar_w = 3 + 2 + nw + 1 + 6 + 7 + 10 + 8 + dw + 8
+    bar_w = 3 + 2 + nw + 1 + cw + tw + thw + pw + dw + 6
     bar = f"  {'─' * bar_w}"
 
     click.echo(f"\n{hdr}")
     click.echo(bar)
 
-    for i, r in enumerate(results):
-        def _dcol(v: int) -> str:
-            label, color = _diff_label(v)
-            return click.style(label, fg=color) + " " * (dw - len(label))
+    check = click.style("✓", fg="green")
 
-        dp = _dcol(r.diff_proof)
+    for i, r in enumerate(results):
+        label, color = _diff_label(r.diff_proof)
+        dp = _styled_pad(label, click.style(label, fg=color), dw)
         status = click.style("PASS", fg="green")
 
         click.echo(
             f"  {i + 1:>3}  {r.name:<{nw}} "
-            f"{click.style('✓', fg='green'):<6} "
-            f"{click.style('✓', fg='green'):<7} "
-            f"{click.style('✓', fg='green'):<10} "
-            f"{click.style('✓', fg='green'):<8} "
+            f"{_styled_pad('✓', check, cw)}"
+            f"{_styled_pad('✓', check, tw)}"
+            f"{_styled_pad('✓', check, thw)}"
+            f"{_styled_pad('✓', check, pw)}"
             f"{dp}{status}"
         )
 
