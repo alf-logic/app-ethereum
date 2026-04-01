@@ -49,3 +49,7 @@ theorem test_shiftl128_shift_65 :
 /-- @id-scen-shift-127 -/
 theorem test_shiftl128_shift_127 :
     shiftl ⟨0, 1⟩ 127 = ⟨0x8000000000000000, 0⟩ := by native_decide
+
+/-- @id-scen-shift-1-full -/
+theorem test_shiftl128_shift_1_full :
+    shiftl ⟨0x4000000000000000, 0x8000000000000001⟩ 1 = ⟨0x8000000000000001, 0x0000000000000002⟩ := by native_decide
