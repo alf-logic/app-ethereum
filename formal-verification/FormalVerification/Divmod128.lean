@@ -13,8 +13,6 @@
     Rule: Division by zero returns (0, 0)
 
       @id-scen-div-by-zero
-      @verified-by-unittest
-      @unittest-name-test_divmod128_division_by_zero
       @verified-by-lean
       @lean-name-test_divmod128_division_by_zero
       Scenario: 100 / 0 = (0, 0)
@@ -23,8 +21,6 @@
     Rule: Divisor > dividend yields quot=0, rem=dividend
 
       @id-scen-divisor-greater
-      @verified-by-unittest
-      @unittest-name-test_divmod128_divisor_greater_than_dividend
       @verified-by-lean
       @lean-name-test_divmod128_divisor_greater_than_dividend
       Scenario: 5 / 100 = (0, 5)
@@ -33,8 +29,6 @@
     Rule: Exact division has remainder zero
 
       @id-scen-equal-operands
-      @verified-by-unittest
-      @unittest-name-test_divmod128_equal_operands
       @verified-by-lean
       @lean-name-test_divmod128_equal_operands
       Scenario: 42 / 42 = (1, 0)
@@ -43,8 +37,6 @@
     Rule: General division
 
       @id-scen-100-div-7
-      @verified-by-unittest
-      @unittest-name-test_divmod128_100_div_7
       @verified-by-lean
       @lean-name-test_divmod128_100_div_7
       Scenario: 100 / 7 = (14, 2)
@@ -53,15 +45,11 @@
     Rule: Division by power of two
 
       @id-scen-power-of-two-small
-      @verified-by-unittest
-      @unittest-name-test_divmod128_power_of_two_small
       @verified-by-lean
       @lean-name-test_divmod128_power_of_two_small
       Scenario: 1024 / 16 = (64, 0)
 
       @id-scen-power-of-two-cross-half
-      @verified-by-unittest
-      @unittest-name-test_divmod128_power_of_two_cross_half
       @verified-by-lean
       @lean-name-test_divmod128_power_of_two_cross_half
       Scenario: {3,0} / {1,0} = (3, 0)
@@ -70,8 +58,6 @@
     Rule: Large 128-bit values
 
       @id-scen-large-dividend
-      @verified-by-unittest
-      @unittest-name-test_divmod128_large_dividend_small_divisor
       @verified-by-lean
       @lean-name-test_divmod128_large_dividend_small_divisor
       Scenario: 2^64 / 3 = (0x5555555555555555, 1)
@@ -93,16 +79,19 @@ import FormalVerification.Copy128
 
 namespace UInt128
 
-/-- Long-division loop: while resMod >= r, subtract shifted divisor and accumulate quotient bits. -/
-private def divmodLoop (r copyd adder resDiv resMod : UInt128) : UInt128 × UInt128 :=
-  if ¬(gte resMod r) then (resDiv, resMod)
-  else
-    let (resMod', resDiv') :=
-      if gte resMod copyd
-      then (sub resMod copyd, UInt128.or resDiv adder)
-      else (resMod, resDiv)
-    divmodLoop r (shiftr copyd 1) (shiftr adder 1) resDiv' resMod'
-decreasing_by sorry
+/-- Long-division loop with fuel (max 129 iterations for 128-bit values).
+    Each iteration halves copyd and adder via shiftr, so at most 128 steps. -/
+def divmodLoop (fuel : Nat) (r copyd adder resDiv resMod : UInt128) : UInt128 × UInt128 :=
+  match fuel with
+  | 0 => (resDiv, resMod)
+  | fuel + 1 =>
+    if ¬(gte resMod r) then (resDiv, resMod)
+    else
+      let (resMod', resDiv') :=
+        if gte resMod copyd
+        then (sub resMod copyd, UInt128.or resDiv adder)
+        else (resMod, resDiv)
+      divmodLoop fuel r (shiftr copyd 1) (shiftr adder 1) resDiv' resMod'
 
 /-- Unsigned 128-bit division returning (quotient, remainder). Mirrors C `divmod128()`. -/
 def divmod (l r : UInt128) : UInt128 × UInt128 :=
@@ -114,6 +103,6 @@ def divmod (l r : UInt128) : UInt128 × UInt128 :=
     let adder := shiftl ⟨0, 1⟩ diffBits
     let (copyd, adder) :=
       if gt copyd l then (shiftr copyd 1, shiftr adder 1) else (copyd, adder)
-    divmodLoop r copyd adder zero l
+    divmodLoop 129 r copyd adder zero l
 
 end UInt128
