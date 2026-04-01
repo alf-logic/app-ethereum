@@ -72,7 +72,7 @@ namespace UInt128
 
 /-- Multiply two 64-bit values, returning the full 128-bit result.
     Splits each operand into two 32-bit halves and uses schoolbook multiplication. -/
-private def mulLo64 (a b : UInt64) : UInt128 :=
+def mulLo64 (a b : UInt64) : UInt128 :=
   let al := a &&& 0xFFFFFFFF
   let ah := a >>> 32
   let bl := b &&& 0xFFFFFFFF
