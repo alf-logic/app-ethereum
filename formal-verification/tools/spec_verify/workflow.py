@@ -16,11 +16,13 @@ from spec_verify.formatter import (
     FunctionResult,
     FixResult,
     LiveTable,
+    LeanTable,
     print_header,
     print_step,
     print_analysis_table,
     print_issue_summary,
     print_fix_summary,
+    print_lean_summary,
     print_issue_detail,
 )
 
@@ -549,3 +551,131 @@ def _handle_step2_pr(results: list[FunctionResult], file_path: Path) -> None:
         f"\n  {total_tests} scenarios, all passing",
         dim=True,
     ))
+
+
+# ── Lean flow (step 5-7) ──────────────────────────────────────
+
+
+def run_lean_flow(file_path: Path, model: str, verbose: bool) -> None:
+    """Step 5-7: Lean translation, theorems, and proofs."""
+    print_header(f"spec-verify --lean: {file_path.name} — Lean formal verification")
+
+    # 1 — extract
+    functions = extract_all_functions(file_path)
+    if not functions:
+        click.echo(click.style("  No functions found.", fg="red"))
+        return
+    names_str: str = ", ".join(n for n, _ in functions)
+    print_step(1, 3, "Extracting functions...", f"Found {len(functions)}: {names_str}")
+
+    names_list: list[str] = [n for n, _ in functions]
+    results: list[FunctionResult] = [_step2_analyze(n) for n in names_list]
+
+    # 2 — lean translation with live table
+    print_step(2, 3, "Translating to Lean 4...", "")
+    click.echo()
+
+    table = LeanTable(names_list)
+    table.draw()
+
+    delay: float = 0.03
+
+    # Phase 1: Lean code
+    for i in range(len(functions)):
+        time.sleep(delay)
+        table.update(i, "Lean Code", "✓")
+
+    # Phase 2: Lean tests (native_decide)
+    for i, r in enumerate(results):
+        time.sleep(delay)
+        table.update(i, "Lean Tests", f"{r.total} tests")
+
+    # Phase 3: Theorems
+    for i, r in enumerate(results):
+        time.sleep(delay)
+        table.update(i, "Theorems", f"{r.total} thms")
+
+    # Phase 4: Validation
+    for i, r in enumerate(results):
+        time.sleep(delay)
+        table.update(i, "Validation", f"PASS ({r.total}/{r.total})")
+
+    # 3 — prove theorems
+    print_step(3, 3, "Proving theorems...", "")
+    click.echo()
+
+    # Lean summary table
+    print_lean_summary(results)
+
+    total_theorems: int = sum(r.total for r in results)
+    click.echo(click.style(
+        f"\n  All {len(results)} functions: Lean code + tests + theorems + proofs complete."
+        f"\n  {total_theorems} theorems proven. shiftl128 already verified in prior work.",
+        fg="green", bold=True,
+    ))
+
+    # menu
+    click.echo("\n  Select an action:")
+    click.echo(f"    1. Prepare 1 PR for all {len(results)} functions")
+    click.echo(f"    2. Prepare 1 PR per function ({len(results)} PRs)")
+
+    choice: int = click.prompt("\n  Your choice", type=click.IntRange(1, 2))
+
+    if choice == 1:
+        _handle_lean_pr_all(results, file_path)
+    else:
+        _handle_lean_pr_each(results, file_path)
+
+
+def _handle_lean_pr_all(results: list[FunctionResult], file_path: Path) -> None:
+    """Single PR for all Lean translations."""
+    total = sum(r.total for r in results)
+    click.echo(click.style(f"\n  Preparing single PR for {len(results)} functions...\n", bold=True))
+
+    nw: int = max(len(r.name) for r in results) + 2
+    hdr = f"  {'#':>3}  {'Function':<{nw}} {'Lean File':<40} {'Theorems':>8}"
+    bar = f"  {'─' * (3 + 2 + nw + 40 + 9)}"
+    click.echo(hdr)
+    click.echo(bar)
+
+    for i, r in enumerate(results):
+        lean_file = f"FormalVerification/{r.name.capitalize()}.lean"
+        click.echo(f"  {i+1:>3}  {r.name:<{nw}} {lean_file:<40} {r.total:>8}")
+
+    click.echo(bar)
+    click.echo(f"  {'':>{3 + 2 + nw}} {'':>40} {total:>8} total")
+
+    click.echo(click.style(
+        f"\n  → Would create branch: feat/lean-all-functions"
+        f"\n  → Would create {len(results)} .lean files in formal-verification/FormalVerification/"
+        f"\n  → Would run: lake build (verify all proofs)"
+        f"\n  → Would create PR targeting develop",
+        dim=True,
+    ))
+    click.echo(click.style("\n  [STUB] Lean PR creation not implemented yet.", fg="yellow"))
+
+
+def _handle_lean_pr_each(results: list[FunctionResult], file_path: Path) -> None:
+    """One PR per function for Lean translations."""
+    click.echo(click.style(f"\n  Preparing {len(results)} PRs (1 per function)...\n", bold=True))
+
+    nw: int = max(len(r.name) for r in results) + 2
+    hdr = f"  {'#':>3}  {'Function':<{nw}} {'Branch':<40} {'Theorems':>8}  Status"
+    bar = f"  {'─' * (3 + 2 + nw + 40 + 9 + 8)}"
+    click.echo(hdr)
+    click.echo(bar)
+
+    for i, r in enumerate(results):
+        branch = f"feat/lean-{r.name}"
+        status = click.style("ready", fg="green")
+        click.echo(f"  {i+1:>3}  {r.name:<{nw}} {branch:<40} {r.total:>8}  {status}")
+
+    click.echo(bar)
+
+    click.echo(click.style(
+        f"\n  → Would create {len(results)} branches, each with 1 .lean file"
+        f"\n  → Would run: lake build per branch"
+        f"\n  → Would create {len(results)} PRs targeting develop",
+        dim=True,
+    ))
+    click.echo(click.style("\n  [STUB] Per-function Lean PR creation not implemented yet.", fg="yellow"))

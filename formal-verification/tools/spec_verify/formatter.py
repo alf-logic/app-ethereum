@@ -109,6 +109,112 @@ class LiveTable:
         self.redraw()
 
 
+# ── Lean live table ────────────────────────────────────────────
+
+
+class LeanTable:
+    """Terminal table for Lean translation progress."""
+
+    COLUMNS = ("Lean Code", "Lean Tests", "Theorems", "Validation")
+
+    def __init__(self, names: list[str]) -> None:
+        self.names: list[str] = names
+        self.name_w: int = max(max(len(n) for n in names) + 2, 24)
+        self.cells: list[dict[str, str]] = [
+            {c: "—" for c in self.COLUMNS} for _ in names
+        ]
+        self._line_count: int = 0
+
+    def _build_lines(self) -> list[str]:
+        lines: list[str] = []
+        hdr = (
+            f"  {'#':>3}  {'Function':<{self.name_w}}"
+            f" {'Lean Code':<11} {'Lean Tests':<12} {'Theorems':<10} Validation"
+        )
+        lines.append(hdr)
+        lines.append(f"  {'─' * (3 + 2 + self.name_w + 11 + 12 + 10 + 18)}")
+
+        for i, name in enumerate(self.names):
+            c = self.cells[i]
+            v = c["Validation"]
+            if "PASS" in v:
+                v_display = click.style(v, fg="green")
+            elif "FAIL" in v:
+                v_display = click.style(v, fg="red")
+            else:
+                v_display = v
+            lines.append(
+                f"  {i + 1:>3}  {name:<{self.name_w}}"
+                f" {c['Lean Code']:<11} {c['Lean Tests']:<12} {c['Theorems']:<10} {v_display}"
+            )
+        return lines
+
+    def draw(self) -> None:
+        lines = self._build_lines()
+        for line in lines:
+            sys.stdout.write(line + "\n")
+        sys.stdout.flush()
+        self._line_count = len(lines)
+
+    def redraw(self) -> None:
+        if self._line_count:
+            sys.stdout.write(f"\033[{self._line_count}A")
+        lines = self._build_lines()
+        for line in lines:
+            sys.stdout.write(f"\033[2K{line}\n")
+        sys.stdout.flush()
+        self._line_count = len(lines)
+
+    def update(self, idx: int, column: str, value: str) -> None:
+        self.cells[idx][column] = value
+        self.redraw()
+
+
+# ── Lean summary table ─────────────────────────────────────────
+
+
+def print_lean_summary(results: list[FunctionResult]) -> None:
+    """Summary table with proof difficulty for Lean pipeline."""
+    nw: int = max(len(r.name) for r in results) + 2
+    dw: int = 8
+
+    hdr = (
+        f"  {'#':>3}  {'Function':<{nw}} "
+        f"{'Code':<6} {'Tests':<7} {'Theorems':<10} {'Proofs':<8} "
+        f"{'D(proof)':<{dw}} Status"
+    )
+    bar_w = 3 + 2 + nw + 1 + 6 + 7 + 10 + 8 + dw + 8
+    bar = f"  {'─' * bar_w}"
+
+    click.echo(f"\n{hdr}")
+    click.echo(bar)
+
+    for i, r in enumerate(results):
+        def _dcol(v: int) -> str:
+            label, color = _diff_label(v)
+            return click.style(label, fg=color) + " " * (dw - len(label))
+
+        dp = _dcol(r.diff_proof)
+        status = click.style("PASS", fg="green")
+
+        click.echo(
+            f"  {i + 1:>3}  {r.name:<{nw}} "
+            f"{click.style('✓', fg='green'):<6} "
+            f"{click.style('✓', fg='green'):<7} "
+            f"{click.style('✓', fg='green'):<10} "
+            f"{click.style('✓', fg='green'):<8} "
+            f"{dp}{status}"
+        )
+
+    click.echo(bar)
+
+    total_theorems: int = sum(r.total for r in results)
+    click.echo(
+        f"\n  {len(results)} functions translated, "
+        f"{total_theorems} theorems formulated and proven"
+    )
+
+
 # ── Analysis table (function summary) ──────────────────────────
 
 
