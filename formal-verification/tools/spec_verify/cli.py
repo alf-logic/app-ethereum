@@ -10,16 +10,19 @@ from pathlib import Path
 @click.option("--step2", is_flag=True, default=False, help="Step 2: post-fix verification (all bugs fixed)")
 @click.option("--lean", is_flag=True, default=False, help="Step 5-6: Lean translation and tests")
 @click.option("--prove", is_flag=True, default=False, help="Step 7: Prove theorems with Aleph Prover")
+@click.option("--final", is_flag=True, default=False, help="Step 8-9: System-level properties (ring axioms)")
 @click.option("--model", default="gpt-5.2", show_default=True, help="LLM model")
 @click.option("--verbose", "-v", is_flag=True, default=False)
-def main(file: str, issue: int | None, step2: bool, lean: bool, prove: bool, model: str, verbose: bool):
+def main(file: str, issue: int | None, step2: bool, lean: bool, prove: bool, final: bool, model: str, verbose: bool):
     """Analyze all functions in a C file, or work on a specific issue."""
     source_path = Path(file)
 
-    from spec_verify.workflow import run_file_flow, run_issue_flow, run_step2_flow, run_lean_flow, run_prove_flow
+    from spec_verify.workflow import run_file_flow, run_issue_flow, run_step2_flow, run_lean_flow, run_prove_flow, run_final_flow
 
     if issue:
         run_issue_flow(source_path, issue, model, verbose)
+    elif final:
+        run_final_flow(source_path, model, verbose)
     elif prove:
         run_prove_flow(source_path, model, verbose)
     elif lean:

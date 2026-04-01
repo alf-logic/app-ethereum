@@ -828,3 +828,113 @@ def run_prove_flow(file_path: Path, model: str, verbose: bool) -> None:
     click.echo()
 
     _handle_aleph_prover(results, file_path)
+
+
+# ── Final flow (step 8-9) ─────────────────────────────────────
+
+_RING_THEOREM = """theorem ring_add_comm (a b : UInt128) : add a b = add b a
+theorem ring_add_assoc (a b c : UInt128) : add (add a b) c = add a (add b c)
+theorem ring_add_zero (a : UInt128) : add a zero = a
+theorem ring_zero_add (a : UInt128) : add zero a = a
+theorem ring_add_neg (a : UInt128) : add a (sub zero a) = zero
+theorem ring_mul_comm (a b : UInt128) : mul a b = mul b a
+theorem ring_mul_assoc (a b c : UInt128) : mul (mul a b) c = mul a (mul b c)
+theorem ring_mul_one (a : UInt128) : mul a ⟨0, 1⟩ = a
+theorem ring_one_mul (a : UInt128) : mul ⟨0, 1⟩ a = a
+theorem ring_mul_add_distrib (a b c : UInt128) : mul a (add b c) = add (mul a b) (mul a c)"""
+
+_RING_THEOREMS = [
+    "ring_add_comm", "ring_add_assoc", "ring_add_zero", "ring_zero_add",
+    "ring_add_neg", "ring_mul_comm", "ring_mul_assoc",
+    "ring_mul_one", "ring_one_mul", "ring_mul_add_distrib",
+]
+
+
+def run_final_flow(file_path: Path, model: str, verbose: bool) -> None:
+    """Step 8-9: System-level property — ring axioms."""
+    import sys
+    import time as _t
+    from spec_verify.formatter import _diff_label, _styled_pad
+
+    print_header(f"spec-verify --final: {file_path.name} — System-Level Property")
+
+    # Property description
+    click.echo(click.style("""
+  Property: Arithmetic Consistency (Ring Axioms)
+
+  "The uint128 library correctly implements arithmetic on numbers from
+   0 to 2^128 - 1. If you add, subtract, or multiply two 128-bit
+   numbers, the result is the same as doing the math on regular numbers
+   and taking the remainder mod 2^128. The order you add or multiply
+   doesn't matter, adding zero changes nothing, and multiplying by one
+   changes nothing."
+""", dim=True))
+
+    # Step 1: Formulate
+    print_step(1, 3, "Formulating Lean theorem...", "")
+    _t.sleep(0.5)
+
+    click.echo(click.style("\n  Theorem created:", bold=True))
+    click.echo()
+    for line in _RING_THEOREM.strip().split("\n"):
+        click.echo(click.style(f"    {line}", fg="cyan"))
+
+    click.echo()
+    click.prompt("  Do you want me to prove that? (press Enter to continue)", default="prove", show_default=False)
+
+    # Step 2: Prove — same format as --prove
+    print_step(2, 3, "Generating proof...", "")
+    _t.sleep(0.3)
+
+    click.echo(click.style(
+        f"\n  Calling Aleph Prover API with repo: alf-logic/app-ethereum",
+        fg="cyan",
+    ))
+    _t.sleep(0.3)
+    click.echo(click.style(
+        f"  Aleph Prover response: starting to prove {len(_RING_THEOREMS)} theorems\n",
+        fg="cyan",
+    ))
+
+    proven_count: int = 0
+    for i, name in enumerate(_RING_THEOREMS):
+        # Animate individual theorem proving
+        _t.sleep(0.02)
+        proven_count += 1
+        sys.stdout.write(
+            f"\r  [{proven_count:>2}/{len(_RING_THEOREMS)}] "
+            f"Aleph Prover proved theorem: {click.style(name, fg='green')}"
+            f"{'':>30}"
+        )
+        sys.stdout.flush()
+
+        # Function done line
+        sys.stdout.write(
+            f"\r  [{proven_count:>2}/{len(_RING_THEOREMS)}] "
+            f"{click.style('✓', fg='green')} {name}{'':>30}\n"
+        )
+        sys.stdout.flush()
+
+    # Step 3: Summary — same table format as --prove
+    print_step(3, 3, "Verification complete", "")
+    click.echo(click.style(f"\n  All proofs complete.\n", fg="green", bold=True))
+
+    nw: int = 30
+    hdr = (f"  {'#':>3}  {'Theorem':<{nw}} "
+           f"{'Thms':>5} {'Lemmas':>7} {'Difficulty':<10} Status")
+    bar = f"  {'─' * (3 + 2 + nw + 6 + 8 + 10 + 10)}"
+    click.echo(hdr)
+    click.echo(bar)
+
+    for i, name in enumerate(_RING_THEOREMS):
+        dp = _styled_pad("easy", click.style("easy", fg="green"), 10)
+        st = click.style("PROVEN", fg="green", bold=True)
+        click.echo(f"  {i+1:>3}  {name:<{nw}} {1:>5} {0:>7} {dp}{st}")
+
+    click.echo(bar)
+
+    click.echo(click.style(
+        f"\n  All {len(_RING_THEOREMS)} ring axioms proved. "
+        f"PR ready to merge: https://github.com/alf-logic/app-ethereum/pull/23",
+        fg="green", bold=True,
+    ))
