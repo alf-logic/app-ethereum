@@ -623,16 +623,20 @@ def run_lean_flow(file_path: Path, model: str, verbose: bool) -> None:
     click.echo("\n  Select an action:")
     click.echo(f"    1. Prepare 1 PR for all {len(results)} functions")
     click.echo(f"    2. Prepare 1 PR per function ({len(results)} PRs)")
-    click.echo(f"    3. Prove all theorems with Aleph Prover")
 
-    choice: int = click.prompt("\n  Your choice", type=click.IntRange(1, 3))
+    choice: int = click.prompt("\n  Your choice", type=click.IntRange(1, 2))
 
     if choice == 1:
         _handle_lean_pr_all(results, file_path)
-    elif choice == 2:
-        _handle_lean_pr_each(results, file_path)
     else:
-        _handle_aleph_prover(results, file_path)
+        _handle_lean_pr_each(results, file_path)
+
+    # Next step
+    click.echo(click.style(
+        f"\n  Next step: Prove all theorems with Aleph Prover"
+        f"\n  Run: spec-verify --file {file_path} --prove",
+        fg="cyan", bold=True,
+    ))
 
 
 def _handle_lean_pr_all(results: list[FunctionResult], file_path: Path) -> None:
