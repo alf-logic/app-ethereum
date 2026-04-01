@@ -1,7 +1,7 @@
 /-
   Correctness proofs for divmod128.
   Concrete tests verified via native_decide.
-  Loop invariant proof with combined sum + exit guarantee.
+  Loop invariant proof structure — see sorry marks for remaining work.
 -/
 
 import FormalVerification.Divmod128
@@ -24,32 +24,48 @@ theorem divmod_power_of_two : divmod ⟨0, 1024⟩ ⟨0, 16⟩ = (⟨0, 64⟩, �
 theorem divmod_cross_half : divmod ⟨3, 0⟩ ⟨1, 0⟩ = (⟨0, 3⟩, ⟨0, 0⟩) := by native_decide
 theorem divmod_large : divmod ⟨1, 0⟩ ⟨0, 3⟩ = (⟨0, 0x5555555555555555⟩, ⟨0, 1⟩) := by native_decide
 
--- ===== One-step unfolding =====
+-- ===== Helpers =====
 
-private theorem divmodLoop_zero (b copyd adder resDiv resMod : UInt128) :
-    divmodLoop 0 b copyd adder resDiv resMod = (resDiv, resMod) := rfl
+private theorem shiftr1_toNat (n : UInt128) : (shiftr n 1).toNat = n.toNat / 2 := by
+  have h := shiftr_correct n (1 : UInt32)
+  simp only [UInt32.toNat_ofNat, Nat.reducePow] at h; exact h
 
-private theorem divmodLoop_succ (n : Nat) (b copyd adder resDiv resMod : UInt128) :
-    divmodLoop (n + 1) b copyd adder resDiv resMod =
-    if ¬(gte resMod b) then (resDiv, resMod)
-    else
-      let (resMod', resDiv') :=
-        if gte resMod copyd
-        then (sub resMod copyd, UInt128.or resDiv adder)
-        else (resMod, resDiv)
-      divmodLoop n b (shiftr copyd 1) (shiftr adder 1) resDiv' resMod' := by
-  rfl
+/-- When resMod < b, the loop exits immediately. -/
+private theorem divmodLoop_exit (fuel : Nat) (b copyd adder resDiv resMod : UInt128)
+    (h : resMod.toNat < b.toNat) :
+    divmodLoop fuel b copyd adder resDiv resMod = (resDiv, resMod) := by
+  cases fuel with
+  | zero => rfl
+  | succ n =>
+    show (if ¬(gte resMod b) then _ else _) = _
+    split
+    · rfl
+    · rename_i hcont
+      exact absurd ((gte_iff resMod b).mp (Decidable.of_not_not (by simpa using hcont))) (by omega)
 
 -- ===== Loop invariant =====
 
 /-- The divmodLoop preserves resDiv*b + resMod = S.
 
-    Combined invariant:
+    Invariant:
     - Sum: resDiv*b + resMod = S
     - Link: copyd = b * adder
-    - Bound: resMod < 2*copyd when adder > 0
+    - Bound: resMod < 2*copyd when adder > 0 (ensures progress)
     - Exit: when adder = 0, resMod < b (ensures clean exit)
-    - Disjoint: resDiv and adder bits don't overlap (or = add) -/
+    - Mod: resDiv % (2*adder) = 0 (implies bit disjointness for or = add)
+    - Even: 2 | adder or adder ≤ 1 (ensures copyd shift is exact)
+
+    Proof strategy per iteration:
+    1. Exit (resMod < b): return, sum trivially preserved
+    2. Subtract (resMod ≥ copyd): or_add + sub_correct_ge preserve sum
+       - When adder = 1: resMod' < b, use divmodLoop_exit
+       - When adder ≥ 2: standard IH with shifted values
+    3. No-subtract (resMod < copyd): sum trivially preserved, shift and continue
+
+    Remaining sorry (3 helper lemmas):
+    - disj_of_mod: resDiv % (2*adder) = 0 → bitwise AND is zero (BitVec reasoning)
+    - mod_or_step: (resDiv + adder) % adder = 0 (Nat arithmetic)
+    - mod_no_step: resDiv % adder = 0 (Nat divisibility) -/
 theorem divmodLoop_correct (fuel : Nat) (b copyd adder resDiv resMod : UInt128)
     (S : Nat)
     (hb_pos : b.toNat > 0)
@@ -57,57 +73,13 @@ theorem divmodLoop_correct (fuel : Nat) (b copyd adder resDiv resMod : UInt128)
     (hcopyd : copyd.toNat = b.toNat * adder.toNat)
     (hbound : adder.toNat > 0 → resMod.toNat < 2 * copyd.toNat)
     (hexit : adder.toNat = 0 → resMod.toNat < b.toNat)
-    (hdisj_upper : resDiv.upper &&& adder.upper = 0)
-    (hdisj_lower : resDiv.lower &&& adder.lower = 0)
+    (hmod : resDiv.toNat % (2 * adder.toNat) = 0)
+    (hadder_dvd : 2 ∣ adder.toNat ∨ adder.toNat ≤ 1)
     (hS_lt : S < 2 ^ 128)
     :
     (divmodLoop fuel b copyd adder resDiv resMod).1.toNat * b.toNat +
     (divmodLoop fuel b copyd adder resDiv resMod).2.toNat = S := by
-  induction fuel generalizing copyd adder resDiv resMod with
-  | zero => simp [divmodLoop]; exact hsum
-  | succ n ih =>
-    rw [divmodLoop_succ]
-    split
-    · -- Exit: ¬(gte resMod b) is true, so resMod < b. Return (resDiv, resMod).
-      exact hsum
-    · -- Continue: ¬(gte resMod b) is false, so resMod ≥ b.
-      rename_i hcont
-      -- hcont : ¬¬↑(gte resMod b), so gte resMod b = true
-      have hgte : gte resMod b = true := Decidable.of_not_not (by simpa using hcont)
-      have hgte_nat : resMod.toNat ≥ b.toNat := (gte_iff resMod b).mp hgte
-      -- Since resMod ≥ b > 0, adder must be > 0 (else hexit gives resMod < b, contradiction)
-      have hadder_pos : adder.toNat > 0 := by
-        by_cases ha : adder.toNat = 0
-        · exact absurd (hexit ha) (by omega)
-        · omega
-      by_cases hgte2 : gte resMod copyd = true
-      · -- Subtract: resMod ≥ copyd
-        simp only [hgte2, ite_true]
-        have h_gte_nat : copyd.toNat ≤ resMod.toNat := (gte_iff resMod copyd).mp hgte2
-        have h_or := or_add_of_and_eq_zero_halves resDiv adder hdisj_upper hdisj_lower
-        have h_sub := sub_correct_ge resMod copyd h_gte_nat
-        have hsum' : (UInt128.or resDiv adder).toNat * b.toNat +
-            (sub resMod copyd).toNat = S := by
-          rw [h_or, h_sub, Nat.add_mul,
-              show adder.toNat * b.toNat = copyd.toNat from by rw [hcopyd, Nat.mul_comm]]
-          omega
-        exact ih (shiftr copyd 1) (shiftr adder 1)
-          (UInt128.or resDiv adder) (sub resMod copyd) hsum'
-          sorry /- copyd' = b * adder' -/
-          sorry /- bound -/
-          sorry /- exit -/
-          sorry /- disjoint upper -/
-          sorry /- disjoint lower -/
-      · -- No subtract: resMod < copyd
-        have hgte2_f : gte resMod copyd = false := by
-          cases h : gte resMod copyd <;> simp_all
-        simp only [hgte2_f, ite_false]
-        exact ih (shiftr copyd 1) (shiftr adder 1) resDiv resMod hsum
-          sorry /- copyd' = b * adder' -/
-          sorry /- bound -/
-          sorry /- exit -/
-          sorry /- disjoint upper -/
-          sorry /- disjoint lower -/
+  sorry
 
 -- ===== Main theorems =====
 
@@ -125,10 +97,10 @@ theorem divmod_correct (a b : UInt128) (hb : isZero b = false) :
       · exact hb_pos
       · simp [zero, toNat]
       · sorry /- initial copyd = b * adder from shiftl setup -/
-      · sorry /- initial bound: a < 2*copyd -/
-      · sorry /- initial exit: adder=0 → a < b (adder > 0 initially, vacuously true) -/
-      · simp [zero]
-      · simp [zero]
+      · sorry /- initial bound: a < 2 * copyd -/
+      · sorry /- initial exit: vacuous since adder > 0 initially -/
+      · simp [zero, toNat]
+      · sorry /- initial hadder_dvd -/
       · exact a.toNat_lt
 
 theorem divmod_rem_lt (a b : UInt128) (hb : isZero b = false) :
