@@ -739,3 +739,24 @@ def _handle_aleph_prover(results: list[FunctionResult], file_path: Path) -> None
         dim=True,
     ))
     click.echo(click.style("\n  [STUB] Aleph Prover integration not implemented yet.", fg="yellow"))
+
+
+# ── Prove flow (step 7) ───────────────────────────────────────
+
+
+def run_prove_flow(file_path: Path, model: str, verbose: bool) -> None:
+    """Step 7: Prove all theorems with Aleph Prover."""
+    print_header(f"spec-verify --prove: {file_path.name} — Aleph Prover")
+
+    functions = extract_all_functions(file_path)
+    if not functions:
+        click.echo(click.style("  No functions found.", fg="red"))
+        return
+
+    names_list: list[str] = [n for n, _ in functions]
+    results: list[FunctionResult] = [_step2_analyze(n) for n in names_list]
+
+    print_step(1, 1, "Proving theorems with Aleph Prover...", "")
+    click.echo()
+
+    _handle_aleph_prover(results, file_path)
