@@ -27,10 +27,10 @@ theorem isZero_zero : isZero zero = true := by
 /-- If `isZero` returns false, the value is nonzero. -/
 theorem not_isZero_iff (n : UInt128) : isZero n = false ↔ n.toNat ≠ 0 := by
   constructor
-  · intro h habs; rw [(isZero_iff n).mpr habs] at h; exact Bool.noConfusion h
-  · intro h; by_contra habs
-    push_neg at habs
-    simp [Bool.not_eq_false] at habs
-    exact h ((isZero_iff n).mp habs)
+  · intro h habs; rw [(isZero_iff n).mpr habs] at h; simp at h
+  · intro h
+    cases hc : isZero n with
+    | false => rfl
+    | true => exact absurd ((isZero_iff n).mp hc) h
 
 end UInt128
