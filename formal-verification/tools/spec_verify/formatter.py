@@ -27,6 +27,7 @@ class FunctionResult:
     diff_proof: int = 1
     issue_url: str = ""
     test_summary: str = ""  # e.g. "1 FAIL, 3 PASS"
+    lean_tests: int = 0  # number of Lean native_decide tests
 
 
 # ── Primitives ──────────────────────────────────────────────────
