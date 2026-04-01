@@ -420,8 +420,8 @@ _ANALYSIS_STEP2: dict[str, dict] = {
     "zero128":               dict(t=3,  ds=1, dl=1, dp=1, finding=""),
     "copy128":               dict(t=3,  ds=1, dl=1, dp=1, finding=""),
     "clear128":              dict(t=2,  ds=1, dl=1, dp=1, finding=""),
-    "shiftl128":             dict(t=9,  ds=3, dl=3, dp=5, finding="proven correct in Lean"),
-    "shiftr128":             dict(t=9,  ds=3, dl=3, dp=5, finding="fixed: aliasing bug (#10)"),
+    "shiftl128":             dict(t=9,  ds=3, dl=3, dp=5, finding=""),
+    "shiftr128":             dict(t=9,  ds=3, dl=3, dp=5, finding=""),
     "bits128":               dict(t=5,  ds=2, dl=2, dp=3, finding=""),
     "equal128":              dict(t=4,  ds=1, dl=1, dp=1, finding=""),
     "gt128":                 dict(t=5,  ds=1, dl=2, dp=2, finding=""),
@@ -430,11 +430,11 @@ _ANALYSIS_STEP2: dict[str, dict] = {
     "sub128":                dict(t=5,  ds=2, dl=2, dp=3, finding=""),
     "or128":                 dict(t=3,  ds=1, dl=1, dp=1, finding=""),
     "mul128":                dict(t=6,  ds=4, dl=5, dp=8, finding=""),
-    "divmod128":             dict(t=7,  ds=5, dl=6, dp=9, finding="fixed: div-by-zero guard (#11)"),
+    "divmod128":             dict(t=7,  ds=5, dl=6, dp=9, finding=""),
     "tostring128":           dict(t=6,  ds=3, dl=4, dp=6, finding=""),
-    "tostring128_signed":    dict(t=5,  ds=3, dl=4, dp=6, finding="fixed: buffer guard (#12)"),
-    "convertUint64BEto128":  dict(t=5,  ds=3, dl=3, dp=4, finding="fixed: clear target (#13)"),
-    "convertUint128BE":      dict(t=5,  ds=2, dl=2, dp=3, finding="fixed: clear on error (#14)"),
+    "tostring128_signed":    dict(t=5,  ds=3, dl=4, dp=6, finding=""),
+    "convertUint64BEto128":  dict(t=5,  ds=3, dl=3, dp=4, finding=""),
+    "convertUint128BE":      dict(t=5,  ds=2, dl=2, dp=3, finding=""),
 }
 
 
