@@ -8,11 +8,16 @@ import FormalVerification.Basic
 
 namespace UInt128
 
+/-- Count significant bits of a Nat. -/
+private def natBitWidth : Nat → Nat
+  | 0 => 0
+  | n + 1 => 1 + natBitWidth ((n + 1) / 2)
+termination_by n => n
+decreasing_by omega
+
 /-- Count the number of significant bits in a UInt64 value. -/
-private def bitWidth64 (n : UInt64) : UInt32 :=
-  if n == 0 then 0
-  else (1 : UInt32) + bitWidth64 (n >>> 1)
-decreasing_by sorry
+def bitWidth64 (n : UInt64) : UInt32 :=
+  (natBitWidth n.toNat).toUInt32
 
 /-- Return the number of significant bits in a 128-bit value. Mirrors C `bits128()`. -/
 def bits (n : UInt128) : UInt32 :=
