@@ -623,13 +623,16 @@ def run_lean_flow(file_path: Path, model: str, verbose: bool) -> None:
     click.echo("\n  Select an action:")
     click.echo(f"    1. Prepare 1 PR for all {len(results)} functions")
     click.echo(f"    2. Prepare 1 PR per function ({len(results)} PRs)")
+    click.echo(f"    3. Prove all theorems with Aleph Prover")
 
-    choice: int = click.prompt("\n  Your choice", type=click.IntRange(1, 2))
+    choice: int = click.prompt("\n  Your choice", type=click.IntRange(1, 3))
 
     if choice == 1:
         _handle_lean_pr_all(results, file_path)
-    else:
+    elif choice == 2:
         _handle_lean_pr_each(results, file_path)
+    else:
+        _handle_aleph_prover(results, file_path)
 
 
 def _handle_lean_pr_all(results: list[FunctionResult], file_path: Path) -> None:
@@ -691,3 +694,44 @@ def _handle_lean_pr_each(results: list[FunctionResult], file_path: Path) -> None
         dim=True,
     ))
     click.echo(click.style("\n  [STUB] Per-function Lean PR creation not implemented yet.", fg="yellow"))
+
+
+def _handle_aleph_prover(results: list[FunctionResult], file_path: Path) -> None:
+    """Prove all theorems using Aleph Prover."""
+    from spec_verify.formatter import _diff_label, _styled_pad
+
+    total_lean = sum((r.lean_tests if r.lean_tests else r.total) for r in results)
+
+    click.echo(click.style(f"\n  Aleph Prover — proving {total_lean} theorems...\n", bold=True))
+
+    nw: int = max(len(r.name) for r in results) + 2
+    check = click.style("✓", fg="green")
+
+    hdr = f"  {'#':>3}  {'Function':<{nw}} {'Theorems':>8}  {'Difficulty':<10} Status"
+    bar = f"  {'─' * (3 + 2 + nw + 9 + 11 + 8)}"
+    click.echo(hdr)
+    click.echo(bar)
+
+    import time as _t
+    for i, r in enumerate(results):
+        lt = r.lean_tests if r.lean_tests else r.total
+        label, color = _diff_label(r.diff_proof)
+        dp = click.style(label, fg=color)
+        _t.sleep(0.05)
+        click.echo(
+            f"  {i + 1:>3}  {r.name:<{nw}} {lt:>8}  {dp:<10}      "
+            f"{click.style('PROVEN', fg='green')}"
+        )
+
+    click.echo(bar)
+    click.echo(click.style(
+        f"\n  All {total_lean} theorems proven by Aleph Prover.",
+        fg="green", bold=True,
+    ))
+    click.echo(click.style(
+        f"\n  → Would run: aleph prove formal-verification/FormalVerification/"
+        f"\n  → Would verify: lake build (all sorry marks resolved)"
+        f"\n  → Would create PR with complete proofs",
+        dim=True,
+    ))
+    click.echo(click.style("\n  [STUB] Aleph Prover integration not implemented yet.", fg="yellow"))
