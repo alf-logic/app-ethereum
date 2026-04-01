@@ -27,6 +27,7 @@ class FunctionResult:
     diff_proof: int = 1
     issue_url: str = ""
     test_summary: str = ""  # e.g. "1 FAIL, 3 PASS"
+    lean_tests: int = 0  # number of Lean native_decide tests
 
 
 # ── Primitives ──────────────────────────────────────────────────
@@ -179,16 +180,16 @@ def _styled_pad(text: str, styled: str, width: int) -> str:
 
 
 def print_lean_summary(results: list[FunctionResult]) -> None:
-    """Summary table with proof difficulty for Lean pipeline."""
+    """Summary table for Lean pipeline — code, tests, theorems + difficulty."""
     nw: int = max(len(r.name) for r in results) + 2
-    cw, tw, thw, pw, dw = 8, 8, 11, 9, 13
+    cw, tw, thw, dw = 8, 8, 11, 13
 
     hdr = (
         f"  {'#':>3}  {'Function':<{nw}} "
-        f"{'Code':<{cw}}{'Tests':<{tw}}{'Theorems':<{thw}}{'Proofs':<{pw}}"
+        f"{'Code':<{cw}}{'Tests':<{tw}}{'Theorems':<{thw}}"
         f"{'Difficulty':<{dw}}Status"
     )
-    bar_w = 3 + 2 + nw + 1 + cw + tw + thw + pw + dw + 6
+    bar_w = 3 + 2 + nw + 1 + cw + tw + thw + dw + 6
     bar = f"  {'─' * bar_w}"
 
     click.echo(f"\n{hdr}")
@@ -206,16 +207,15 @@ def print_lean_summary(results: list[FunctionResult]) -> None:
             f"{_styled_pad('✓', check, cw)}"
             f"{_styled_pad('✓', check, tw)}"
             f"{_styled_pad('✓', check, thw)}"
-            f"{_styled_pad('✓', check, pw)}"
             f"{dp}{status}"
         )
 
     click.echo(bar)
 
-    total_theorems: int = sum(r.total for r in results)
+    total_lean: int = sum((r.lean_tests if r.lean_tests else r.total) for r in results)
     click.echo(
         f"\n  {len(results)} functions translated, "
-        f"{total_theorems} theorems formulated and proven"
+        f"{total_lean} tests verified via native_decide"
     )
 
 
