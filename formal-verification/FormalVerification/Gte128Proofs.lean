@@ -37,6 +37,6 @@ theorem gte_iff (a b : UInt128) : gte a b = true ↔ a.toNat ≥ b.toNat := by
 
 /-- `gte` is reflexive. -/
 theorem gte_refl (a : UInt128) : gte a a = true := by
-  rw [gte_iff]
+  exact (gte_iff a a).2 (by omega)
 
 end UInt128

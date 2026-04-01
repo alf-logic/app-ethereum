@@ -22,14 +22,26 @@ theorem equal_refl (a : UInt128) : equal a a = true := by
 
 /-- `equal` is symmetric. -/
 theorem equal_symm (a b : UInt128) : equal a b = equal b a := by
-  by_cases h : equal a b = true
-  · rw [h, equal_iff] at h ⊢; rw [h]; exact (equal_iff b b).mpr rfl
-  · simp [Bool.not_eq_true] at h
-    by_contra habs
-    push_neg at habs
-    simp [Bool.not_eq_false] at habs
-    rw [(equal_iff b a).mp habs] at h
-    exact Bool.noConfusion ((equal_iff a a).mpr rfl ▸ h)
+  by_cases h : a = b
+  · subst h
+    rfl
+  · have hab_ne_true : equal a b ≠ true := by
+      intro he
+      apply h
+      exact (equal_iff a b).mp he
+    have hba_ne_true : equal b a ≠ true := by
+      intro he
+      apply h
+      exact ((equal_iff b a).mp he).symm
+    have hab : equal a b = false := by
+      cases he : equal a b with
+      | false => simp
+      | true => exact False.elim (hab_ne_true he)
+    have hba : equal b a = false := by
+      cases he : equal b a with
+      | false => simp
+      | true => exact False.elim (hba_ne_true he)
+    rw [hab, hba]
 
 /-- Structural equality implies numeric equality. -/
 theorem equal_toNat (a b : UInt128) (h : equal a b = true) : a.toNat = b.toNat := by

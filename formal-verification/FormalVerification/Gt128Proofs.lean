@@ -28,9 +28,12 @@ theorem gt_iff (a b : UInt128) : gt a b = true ↔ a.toNat > b.toNat := by
 
 /-- `gt` is irreflexive: no value is strictly greater than itself. -/
 theorem gt_irrefl (a : UInt128) : gt a a = false := by
-  by_contra h
-  simp [Bool.not_eq_false] at h
-  have := (gt_iff a a).mp h
-  omega
+  have hne : gt a a ≠ true := by
+    intro h
+    have : a.toNat > a.toNat := (gt_iff a a).mp h
+    omega
+  cases hgt : gt a a with
+  | false => simp
+  | true => exact False.elim (hne hgt)
 
 end UInt128
